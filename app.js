@@ -23,28 +23,36 @@ let localUserPosition = { x: 0, y: 0 };
 const localUserId = crypto.randomUUID();
 
 const drawnPositions = {};
-let positionSpeed = 1.25;
+let positionSpeed = 1.75;
 
 let input = new Input(canvas);
 input.addEventListeners();
 
 // Assign functions with coordinate parameters
 input.onLongPress = (x, y) => {
-    console.log(`Long press at (${x}, ${y})`);
-    // Use x and y coordinates here
+    const worldX = x - camera.x; // Get real-world coordinates
+    const worldY = y - camera.y;
+
+    const maxRangeSq = 20 * 20;
+    if (getSquaredDistance(localUserPosition.x, localUserPosition.y, worldX, worldY) <= maxRangeSq){
+        console.log('This is you.')
+    }
+    else {
+        console.log('You are not within range of LongPress.');
+    }
 };
 
 input.onQuickPress = (x, y) => {
     const worldX = x - camera.x; // Get real-world coordinates
     const worldY = y - camera.y;
 
-    const closest = getClosestPlayer(worldX, worldY, 20); // Optional max range
+    const closest = getClosestUser(worldX, worldY, 20);
 
     if (closest) {
         console.log(`Quick press: Closest player is ${closest.id} at`, closest.position);
         // You can interact with the closest player here
     } else {
-        console.log("No player found within range.");
+        console.log("No player found within range of QuickPress.");
     }
 };
 
@@ -280,22 +288,25 @@ function drawGrid(offsetX, offsetY) {
     }
 }
 
-function getClosestPlayer(x, y, maxRange) {
+function getClosestUser(x, y, maxRange) {
     let closestId = null;
     let closestDistance = Infinity;
+    const maxDistSq = maxRange * maxRange;
 
     for (const [id, pos] of Object.entries(drawnPositions)) {
-        if (id === localUserId) continue; // Skip the local player
+        const distanceSq = getSquaredDistance(pos.x, pos.y, x, y);
 
-        const dx = pos.x - x;
-        const dy = pos.y - y;
-        const distSq = dx * dx + dy * dy;
-
-        if (distSq < closestDistance && Math.sqrt(distSq) <= maxRange) {
-            closestDistance = distSq;
+        if (distanceSq < closestDistance && distanceSq <= maxDistSq) {
+            closestDistance = distanceSq;
             closestId = id;
         }
     }
 
     return closestId ? { id: closestId, position: drawnPositions[closestId] } : null;
+}
+
+function getSquaredDistance(x1, y1, x2, y2){
+    const dx = x1 - x2;
+    const dy = y1 - y2;
+    return dx * dx + dy * dy;
 }
