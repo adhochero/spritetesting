@@ -33,7 +33,7 @@ input.onLongPress = (x, y) => {
     const worldX = x - camera.x; // Get real-world coordinates
     const worldY = y - camera.y;
 
-    const maxRangeSq = 20 * 20;
+    const maxRangeSq = 30 * 30;
     if (getSquaredDistance(localUserPosition.x, localUserPosition.y, worldX, worldY) <= maxRangeSq){
         console.log('This is you.')
     }
@@ -46,7 +46,7 @@ input.onQuickPress = (x, y) => {
     const worldX = x - camera.x; // Get real-world coordinates
     const worldY = y - camera.y;
 
-    const closest = getClosestUser(worldX, worldY, 20);
+    const closest = getClosestUser(worldX, worldY, 30);
 
     if (closest) {
         console.log(`Quick press: Closest player is ${closest.id} at`, closest.position);
@@ -294,6 +294,8 @@ function getClosestUser(x, y, maxRange) {
     const maxDistSq = maxRange * maxRange;
 
     for (const [id, pos] of Object.entries(drawnPositions)) {
+        if (id === localUserId) continue; // Skip the local player
+        
         const distanceSq = getSquaredDistance(pos.x, pos.y, x, y);
 
         if (distanceSq < closestDistance && distanceSq <= maxDistSq) {
