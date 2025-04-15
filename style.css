@@ -4,7 +4,7 @@
     padding: 0;
 }
 
-canvas{
+body{
     touch-action: none;
     -webkit-user-select: none;
     user-select: none;
