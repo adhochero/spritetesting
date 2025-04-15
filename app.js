@@ -39,6 +39,13 @@ input.onLongPress = (x, y) => {
     }
     else {
         console.log('You are not within range of LongPress.');
+
+        const dx = worldX - localUserPosition.x;
+        const dy = worldY - localUserPosition.y;
+        const dNormalized = normalize2D(dx, dy);
+        
+        velocity.x = (dNormalized.x) * 500;
+        velocity.y = (dNormalized.y) * 500;
     }
 };
 
@@ -312,3 +319,9 @@ function getSquaredDistance(x1, y1, x2, y2){
     const dy = y1 - y2;
     return dx * dx + dy * dy;
 }
+
+function normalize2D(x, y) {
+    const length = Math.hypot(x, y); // √(x² + y²)
+    if (length === 0) return { x: 0, y: 0 }; // zero vector stays zero
+    return { x: x / length, y: y / length }; // each component now between -1 and 1
+  }
