@@ -31,6 +31,7 @@ export class Input {
 
     addEventListeners() {
         this.canvas.style.touchAction = 'none';
+        this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
         
         // Pointer events (mouse + touch)
         this.canvas.addEventListener('pointerdown', this.handleDown, { passive: false });
