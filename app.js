@@ -23,7 +23,7 @@ let localUserPosition = { x: 0, y: 0 };
 const localUserId = crypto.randomUUID();
 
 const drawnPositions = {};
-let positionSpeed = 1.75;
+let positionSpeed = 1.5;
 
 let input = new Input(canvas);
 input.addEventListeners();
@@ -224,8 +224,18 @@ function update(timeStamp) {
             }
 
         // Apply lerp to smooth the movement
-        drawnPositions[id].x = lerp(drawnPositions[id].x, data.user_position.x, positionSpeed * deltaTime);
-        drawnPositions[id].y = lerp(drawnPositions[id].y, data.user_position.y, positionSpeed * deltaTime);
+        // drawnPositions[id].x = lerp(drawnPositions[id].x, data.user_position.x, positionSpeed * deltaTime);
+        // drawnPositions[id].y = lerp(drawnPositions[id].y, data.user_position.y, positionSpeed * deltaTime);
+
+        // Apply damp to smooth the movement
+        function damp(current, target, lambda, dt) {
+            return current + (target - current) * (1 - Math.exp(-lambda * dt));
+        }
+          
+        // Then apply like:
+        drawnPositions[id].x = damp(drawnPositions[id].x, data.user_position.x, positionSpeed, deltaTime);
+        drawnPositions[id].y = damp(drawnPositions[id].y, data.user_position.y, positionSpeed, deltaTime);
+          
 
         drawUser(drawnPositions[id], id, userImage, userImageSize);
     });
@@ -314,7 +324,7 @@ function getClosestUser(x, y, maxRange) {
     return closestId ? { id: closestId, position: drawnPositions[closestId] } : null;
 }
 
-function getSquaredDistance(x1, y1, x2, y2){
+function getSquaredDistance(x1, y1, x2, y2) {
     const dx = x1 - x2;
     const dy = y1 - y2;
     return dx * dx + dy * dy;
@@ -324,4 +334,4 @@ function normalize2D(x, y) {
     const length = Math.hypot(x, y); // √(x² + y²)
     if (length === 0) return { x: 0, y: 0 }; // zero vector stays zero
     return { x: x / length, y: y / length }; // each component now between -1 and 1
-  }
+}
