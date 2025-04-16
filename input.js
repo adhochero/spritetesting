@@ -54,8 +54,8 @@ export class Input {
         let y = e.clientY - rect.top;
 
         if (this.isTouchEvent(e) && this.isIOS()) {
-            x += 120;
-            y += 120;
+            x -= 120;
+            y -= 120;
         }
 
         this.startX = this.endX = x;
@@ -81,8 +81,8 @@ export class Input {
         let y = e.clientY - rect.top;
 
         if (this.isTouchEvent(e) && this.isIOS()) {
-            x += 120;
-            y += 120;
+            x -= 120;
+            y -= 120;
         }
 
         this.endX = x;
