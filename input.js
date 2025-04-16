@@ -79,9 +79,6 @@ export class Input {
         if (!this.isDown) return;
         e.preventDefault();
         
-        const rect = this.canvas.getBoundingClientRect();
-        const endX = e.clientX - rect.left;
-        const endY = e.clientY - rect.top;
         const pressDuration = Date.now() - this.downTime;
         
         clearTimeout(this.longPressTimer);
