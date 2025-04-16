@@ -29,6 +29,14 @@ export class Input {
         this.handleUp = this.handleUp.bind(this);
     }
 
+    isTouchEvent(e) {
+        return e.pointerType === 'touch' || 'ontouchstart' in window;
+    }
+    
+    isIOS() {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    }
+
     addEventListeners() {
         this.canvas.style.touchAction = 'none';
         
@@ -42,8 +50,16 @@ export class Input {
     handleDown(e) {
         e.preventDefault();
         const rect = this.canvas.getBoundingClientRect();
-        this.startX = this.endX = e.clientX - rect.left;
-        this.startY = this.endY = e.clientY - rect.top;
+        let x = e.clientX - rect.left;
+        let y = e.clientY - rect.top;
+
+        if (this.isTouchEvent(e) && this.isIOS()) {
+            x += 120;
+            y += 120;
+        }
+
+        this.startX = this.endX = x;
+        this.startY = this.endY = y;
         this.isDown = true;
         this.isMoving = false;
         this.downTime = Date.now();
@@ -61,8 +77,16 @@ export class Input {
         e.preventDefault();
 
         const rect = this.canvas.getBoundingClientRect();
-        this.endX = e.clientX - rect.left;
-        this.endY = e.clientY - rect.top;
+        let x = e.clientX - rect.left;
+        let y = e.clientY - rect.top;
+
+        if (this.isTouchEvent(e) && this.isIOS()) {
+            x += 120;
+            y += 120;
+        }
+
+        this.endX = x;
+        this.endY = y;
 
         // Check if movement exceeds threshold
         const dx = this.endX - this.startX;
