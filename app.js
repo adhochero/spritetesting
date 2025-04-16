@@ -28,16 +28,10 @@ let positionSpeed = 1.5;
 let input = new Input(canvas);
 input.addEventListeners();
 
-
-let printXY = { x: 0, y: 0 };
-
 // Assign functions with coordinate parameters
 input.onLongPress = (x, y) => {
     const worldX = x - camera.x; // Get real-world coordinates
     const worldY = y - camera.y;
-
-    printXY.x = x;
-    printXY.y = y;
 
     const maxRangeSq = 30 * 30;
     if (getSquaredDistance(localUserPosition.x, localUserPosition.y, worldX, worldY) <= maxRangeSq){
@@ -207,12 +201,6 @@ function update(timeStamp) {
             },
         });
     }
-
-    context.fillStyle = 'black';
-    context.font = 'bold 12px Arial';
-    context.textAlign = 'center';
-    context.fillText(printXY.x, 300, 100);
-    context.fillText(printXY.y, 300, 80);
 
     // Update camera to follow local player
     camera.x = lerp(camera.x, -localUserPosition.x + canvas.width / 2, cameraFollowSpeed * deltaTime);
