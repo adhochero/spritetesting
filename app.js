@@ -1,4 +1,5 @@
 import { Input } from './input.js';
+import { AnimatedSprite } from './animatedSprite.js';
 
 const supabaseUrl = 'https://gqbeyhseepsnhxjblxzh.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdxYmV5aHNlZXBzbmh4amJseHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI3Njk5NDksImV4cCI6MjA1ODM0NTk0OX0.c-3qmp9WTVOEVMlJnSS4b128roCBHd978t3lGebWq4s';
@@ -24,6 +25,11 @@ const localUserId = crypto.randomUUID();
 
 const drawnPositions = {};
 let positionSpeed = 1.5;
+
+let activeSprites = [];
+let explosion;
+const explosionImage = new Image();
+explosionImage.src = './assets/explosion.png'; 
 
 let input = new Input(canvas);
 input.addEventListeners();
@@ -61,6 +67,8 @@ input.onQuickPress = (x, y) => {
     } else {
         console.log("No player found within range of QuickPress.");
     }
+
+    triggerExplosion(worldX, worldY);
 };
 
 let inputSmoothing = { x: 0, y: 0 };
@@ -233,7 +241,7 @@ function update(timeStamp) {
             return current + (target - current) * (1 - Math.exp(-lambda * dt));
         }
           
-        // Then apply like:
+        // Then apply
         drawnPositions[id].x = damp(drawnPositions[id].x, data.user_position.x, positionSpeed, deltaTime);
         drawnPositions[id].y = damp(drawnPositions[id].y, data.user_position.y, positionSpeed, deltaTime);
           
@@ -242,6 +250,17 @@ function update(timeStamp) {
     });
 
     drawUser(localUserPosition, localUserId, userImage, userImageSize);
+
+    // Update and draw all active animations
+    activeSprites.forEach(explosion => {
+        explosion.update(deltaTime);
+        explosion.drawSprite(context);
+    });
+
+    // Remove finished non-looping animations
+    activeSprites = activeSprites.filter(explosion => !(explosion.finished && !explosion.loop));
+
+
     context.restore();
 
     window.requestAnimationFrame(update);
@@ -335,4 +354,10 @@ function normalize2D(x, y) {
     const length = Math.hypot(x, y); // √(x² + y²)
     if (length === 0) return { x: 0, y: 0 }; // zero vector stays zero
     return { x: x / length, y: y / length }; // each component now between -1 and 1
+}
+
+function triggerExplosion(x, y) {
+    let explosion = new AnimatedSprite(explosionImage, 2, 3, 1, 2, 5, x, y, .12, true, false, false);
+    explosion.start(); // start just to be safe
+    activeSprites.push(explosion);
 }
