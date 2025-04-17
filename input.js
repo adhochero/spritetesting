@@ -49,17 +49,9 @@ export class Input {
 
     handleDown(e) {
         e.preventDefault();
-        const rect = this.canvas.getBoundingClientRect();
-        let x = e.clientX - rect.left;
-        let y = e.clientY - rect.top;
-
-        if (this.isTouchEvent(e) && this.isIOS()) {
-            x -= 120;
-            y -= 120;
-        }
-
-        this.startX = this.endX = x;
-        this.startY = this.endY = y;
+        const pos = this.getCanvasCoords(e);
+        this.startX = this.endX = pos.x;
+        this.startY = this.endY = pos.y;
         this.isDown = true;
         this.isMoving = false;
         this.downTime = Date.now();
@@ -76,17 +68,9 @@ export class Input {
         if (!this.isDown) return;
         e.preventDefault();
 
-        const rect = this.canvas.getBoundingClientRect();
-        let x = e.clientX - rect.left;
-        let y = e.clientY - rect.top;
-
-        if (this.isTouchEvent(e) && this.isIOS()) {
-            x -= 120;
-            y -= 120;
-        }
-
-        this.endX = x;
-        this.endY = y;
+        const pos = this.getCanvasCoords(e);
+        this.endX = pos.x;
+        this.endY = pos.y;
 
         // Check if movement exceeds threshold
         const dx = this.endX - this.startX;
@@ -151,4 +135,26 @@ export class Input {
 
         return { x, y };
     }
+
+    getCanvasCoords(event) {
+        const rect = this.canvas.getBoundingClientRect();
+        let clientX = event.clientX;
+        let clientY = event.clientY;
+    
+        // If it's a touch event with touches, grab the first one
+        if (event.touches && event.touches.length > 0) {
+            clientX = event.touches[0].clientX;
+            clientY = event.touches[0].clientY;
+        }
+    
+        // Map from client (CSS) space to canvas (pixel) space
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+    
+        return {
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY
+        };
+    }
+    
 }
