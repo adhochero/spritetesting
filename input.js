@@ -29,14 +29,6 @@ export class Input {
         this.handleUp = this.handleUp.bind(this);
     }
 
-    isTouchEvent(e) {
-        return e.pointerType === 'touch' || 'ontouchstart' in window;
-    }
-    
-    isIOS() {
-        return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    }
-
     addEventListeners() {
         this.canvas.style.touchAction = 'none';
         
@@ -156,5 +148,4 @@ export class Input {
             y: (clientY - rect.top) * scaleY
         };
     }
-    
 }
