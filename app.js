@@ -20,14 +20,20 @@ userImage.src = './assets/pixel_sphere_16x16.png';
 const userImageSize = 25;
 
 let users = {};
-let localUserPosition = { x: 0, y: 0 };
+let localUserPosition = { x: 333, y: 333 };
 const localUserId = crypto.randomUUID();
 
 const drawnPositions = {};
 let positionSpeed = 1.5;
 
+let player;
+let lastDirectionX = 1;
+const playerIdleImage = new Image();
+playerIdleImage.src = './assets/idle.png';
+const playerRunImage = new Image();
+playerRunImage.src = './assets/run.png';
+
 let activeSprites = [];
-let explosion;
 const explosionImage = new Image();
 explosionImage.src = './assets/explosion.png'; 
 
@@ -74,13 +80,17 @@ input.onQuickPress = (x, y) => {
 let inputSmoothing = { x: 0, y: 0 };
 let velocity = { x: 0, y: 0 };
 let moveDirection = { x: 0, y: 0 };
-let inputResponsiveness = 3;
-let localUserSpeed = 200;
+let inputResponsiveness = 6;
+let localUserSpeed = 150;
 
 let camera = { x: 0, y: 0 };
 let cameraFollowSpeed = 3;
 
 let lastTimeStamp = 0;
+
+
+let fadeElapsed = 0; //for draw text fade
+
 
 window.addEventListener('resize', adjustCanvasSize);
 window.addEventListener('orientationchange', adjustCanvasSize);
@@ -88,6 +98,8 @@ window.addEventListener('orientationchange', adjustCanvasSize);
 window.addEventListener('load', async () => {
     initNetworking();
     adjustCanvasSize();
+
+    player = new AnimatedSprite(playerIdleImage, 2, 5, 1, 2, 5, 333, 333, .18, false, true, true);
 
     // Start the animation loop
     window.requestAnimationFrame(update);     
@@ -217,6 +229,16 @@ function update(timeStamp) {
     // Draw grid
     drawGrid(-(camera.x + canvas.width / 2), -(camera.y + canvas.height / 2));
 
+
+    //fade text
+    fadeElapsed += deltaTime;
+    const fadeDuration = 3;
+    let t = Math.min(fadeElapsed / fadeDuration, 1); // Normalize to [0,1]
+    let easedT = Math.pow(t, 3); // ease-in cubic
+    let alpha = lerp(1, 0, easedT); // Fade from 1 → 0
+    drawText(-250, -125, Math.PI / 2, 'bold 64px Xirod', `RGBA(255, 53, 94, ${alpha})`, 'begin');
+
+
     // Apply camera transform
     context.translate(camera.x, camera.y);
 
@@ -249,7 +271,49 @@ function update(timeStamp) {
         drawUser(drawnPositions[id], id, userImage, userImageSize);
     });
 
-    drawUser(localUserPosition, localUserId, userImage, userImageSize);
+    // drawUser(localUserPosition, localUserId, userImage, userImageSize);
+
+    //change spritesheet row by angle of movement
+    context.save(); // Save current state
+    player.x = localUserPosition.x;
+    player.y = localUserPosition.y;
+    if(inputDirection.x !== 0) lastDirectionX = inputDirection.x;
+
+    if (lastDirectionX < 0) {
+        context.translate(player.x * 2, 0);
+        context.scale(-1, 1);
+    }
+
+    let isMoving = inputDirection.x !== 0 || inputDirection.y !== 0;
+
+    if (isMoving && player.spriteSheet !== playerRunImage) {
+        player.setSpriteSheet(playerRunImage, 4, 5, player.currentRow, 4, 0.18);
+    } else if (!isMoving && player.spriteSheet !== playerIdleImage) {
+        player.setSpriteSheet(playerIdleImage, 2, 5, player.currentRow, 2, 0.24);
+    }
+
+    if (isMoving) {        
+        let angle = Math.atan2(inputDirection.y, inputDirection.x);
+        let degrees = angle * (180 / Math.PI);
+        if (degrees < 0) degrees += 360;
+    
+        let dir = 1;
+        if (degrees >= 337.5 || degrees < 22.5)        dir = 3; // Right
+        else if (degrees >= 22.5 && degrees < 67.5)    dir = 2; // Down-Right
+        else if (degrees >= 67.5 && degrees < 112.5)   dir = 1; // Down
+        else if (degrees >= 112.5 && degrees < 157.5)  dir = 2; // Down-Left
+        else if (degrees >= 157.5 && degrees < 202.5)  dir = 3; // Left
+        else if (degrees >= 202.5 && degrees < 247.5)  dir = 4; // Up-Left
+        else if (degrees >= 247.5 && degrees < 292.5)  dir = 5; // Up
+        else if (degrees >= 292.5 && degrees < 337.5)  dir = 4; // Up-Right
+           
+        player.currentRow = dir;
+    }
+    player.update(deltaTime);
+    player.drawSprite(context);
+    context.restore(); // Restore canvas to unrotated state
+
+
 
     // Update and draw all active animations
     activeSprites.forEach(explosion => {
@@ -304,7 +368,7 @@ function lerp(start, end, t) {
 
 function drawGrid(offsetX, offsetY) {
     const gridSize = 50;
-    context.strokeStyle = "#cccccc";
+    context.strokeStyle = "#fff";
     context.lineWidth = 0.5;
 
     const startX = Math.floor(offsetX / gridSize) * gridSize - offsetX;
@@ -360,4 +424,16 @@ function triggerExplosion(x, y) {
     let explosion = new AnimatedSprite(explosionImage, 2, 3, 1, 2, 5, x, y, .12, true, false, false);
     explosion.start(); // start just to be safe
     activeSprites.push(explosion);
+}
+
+function drawText(offsetX, offsetY, rotation, font, color, text){
+    context.save(); // Save current state
+    context.translate(canvas.width / 2 + offsetX, canvas.height / 2 + offsetY); // Move origin to where you want the text to start
+    context.rotate(rotation); // (Math.PI / 2) = Rotate 90° clockwise
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.font = font; // 'size and fontName'
+    context.fillStyle = color; // 'color'
+    context.fillText(text, 0, 0); // 'text'
+    context.restore(); // Restore canvas to unrotated state
 }

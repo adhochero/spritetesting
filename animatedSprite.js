@@ -97,4 +97,16 @@ export class AnimatedSprite{
             frameHeight * this.scale //height
         );
     }
+
+    setSpriteSheet(spriteSheet, totalColumns, totalRows, currentRow, framesOnRow, secPerFrame) {
+        this.spriteSheet = spriteSheet;
+        this.totalColumns = totalColumns;
+        this.totalRows = totalRows;
+        this.currentRow = currentRow;
+        this.framesOnRow = framesOnRow;
+        this.secPerFrame = secPerFrame;
+    
+        this.currentFrame = 0;
+        this.frameTimer = 0;
+    }
 }
