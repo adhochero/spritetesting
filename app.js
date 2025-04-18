@@ -99,7 +99,7 @@ window.addEventListener('load', async () => {
     initNetworking();
     adjustCanvasSize();
 
-    player = new AnimatedSprite(playerIdleImage, 2, 5, 1, 2, 5, 333, 333, .18, false, true, true);
+    player = new AnimatedSprite(playerIdleImage, 2, 5, 1, 2, 5, 333, 333, .42, false, true, true);
 
     // Start the animation loop
     window.requestAnimationFrame(update);     
@@ -289,7 +289,7 @@ function update(timeStamp) {
     if (isMoving && player.spriteSheet !== playerRunImage) {
         player.setSpriteSheet(playerRunImage, 4, 5, player.currentRow, 4, 0.18);
     } else if (!isMoving && player.spriteSheet !== playerIdleImage) {
-        player.setSpriteSheet(playerIdleImage, 2, 5, player.currentRow, 2, 0.24);
+        player.setSpriteSheet(playerIdleImage, 2, 5, player.currentRow, 2, 0.42);
     }
 
     if (isMoving) {        
