@@ -273,47 +273,19 @@ function update(timeStamp) {
 
     // drawUser(localUserPosition, localUserId, userImage, userImageSize);
 
-    //change spritesheet row by angle of movement
-    context.save(); // Save current state
-    player.x = localUserPosition.x;
-    player.y = localUserPosition.y;
-    if(inputDirection.x !== 0) lastDirectionX = inputDirection.x;
-
-    if (lastDirectionX < 0) {
-        context.translate(player.x * 2, 0);
-        context.scale(-1, 1);
-    }
-
-    let isMoving = inputDirection.x !== 0 || inputDirection.y !== 0;
-
-    if (isMoving && player.spriteSheet !== playerRunImage) {
-        player.setSpriteSheet(playerRunImage, 4, 5, player.currentRow, 4, 0.18);
-    } else if (!isMoving && player.spriteSheet !== playerIdleImage) {
-        player.setSpriteSheet(playerIdleImage, 2, 5, player.currentRow, 2, 0.42);
-    }
-
-    if (isMoving) {        
-        let angle = Math.atan2(inputDirection.y, inputDirection.x);
-        let degrees = angle * (180 / Math.PI);
-        if (degrees < 0) degrees += 360;
+    drawAnimatedSpritePlayer(
+        localUserId,
+        player,
+        localUserPosition.x,
+        localUserPosition.y,
+        inputDirection.x,
+        inputDirection.y,
+        lastDirectionX,
+        playerIdleImage,
+        playerRunImage,
+        deltaTime
+    );
     
-        let dir = 1;
-        if (degrees >= 337.5 || degrees < 22.5)        dir = 3; // Right
-        else if (degrees >= 22.5 && degrees < 67.5)    dir = 2; // Down-Right
-        else if (degrees >= 67.5 && degrees < 112.5)   dir = 1; // Down
-        else if (degrees >= 112.5 && degrees < 157.5)  dir = 2; // Down-Left
-        else if (degrees >= 157.5 && degrees < 202.5)  dir = 3; // Left
-        else if (degrees >= 202.5 && degrees < 247.5)  dir = 4; // Up-Left
-        else if (degrees >= 247.5 && degrees < 292.5)  dir = 5; // Up
-        else if (degrees >= 292.5 && degrees < 337.5)  dir = 4; // Up-Right
-           
-        player.currentRow = dir;
-    }
-    player.update(deltaTime);
-    player.drawSprite(context);
-    context.restore(); // Restore canvas to unrotated state
-
-
 
     // Update and draw all active animations
     activeSprites.forEach(explosion => {
@@ -436,4 +408,62 @@ function drawText(offsetX, offsetY, rotation, font, color, text){
     context.fillStyle = color; // 'color'
     context.fillText(text, 0, 0); // 'text'
     context.restore(); // Restore canvas to unrotated state
+}
+
+function drawAnimatedSpritePlayer(
+    userId,
+    animatedSprite,
+    positionX,
+    positionY,
+    directionX,
+    directionY,
+    lastDirectionX,
+    idleImage,
+    runImage,
+    deltaTime
+){
+    context.save(); // Save current state
+    animatedSprite.x = positionX;
+    animatedSprite.y = positionY;
+    if(directionX !== 0) lastDirectionX = directionX;
+
+    if (lastDirectionX < 0) {
+        context.translate(animatedSprite.x * 2, 0);
+        context.scale(-1, 1);
+    }
+
+    let isMoving = directionX !== 0 || directionY !== 0;
+
+    if (isMoving && animatedSprite.spriteSheet !== runImage) {
+        animatedSprite.setSpriteSheet(runImage, 4, 5, animatedSprite.currentRow, 4, 0.18);
+    } else if (!isMoving && animatedSprite.spriteSheet !== idleImage) {
+        animatedSprite.setSpriteSheet(idleImage, 2, 5, animatedSprite.currentRow, 2, 0.42);
+    }
+
+    // change spritesheet row by angle of movement
+    if (isMoving) {        
+        let angle = Math.atan2(directionY, directionX);
+        let degrees = angle * (180 / Math.PI);
+        if (degrees < 0) degrees += 360;
+    
+        let dir = 1;
+        if (degrees >= 337.5 || degrees < 22.5)        dir = 3; // Right
+        else if (degrees >= 22.5 && degrees < 67.5)    dir = 2; // Down-Right
+        else if (degrees >= 67.5 && degrees < 112.5)   dir = 1; // Down
+        else if (degrees >= 112.5 && degrees < 157.5)  dir = 2; // Down-Left
+        else if (degrees >= 157.5 && degrees < 202.5)  dir = 3; // Left
+        else if (degrees >= 202.5 && degrees < 247.5)  dir = 4; // Up-Left
+        else if (degrees >= 247.5 && degrees < 292.5)  dir = 5; // Up
+        else if (degrees >= 292.5 && degrees < 337.5)  dir = 4; // Up-Right
+           
+        animatedSprite.currentRow = dir;
+    }
+    animatedSprite.update(deltaTime);
+    animatedSprite.drawSprite(context);
+    context.restore(); // Restore canvas to unrotated state
+
+    context.fillStyle = 'black';
+    context.font = '12px Xirod';
+    context.textAlign = 'center';
+    context.fillText(userId.substring(0, 6), positionX, positionY - animatedSprite.spriteSheet.naturalHeight * 3 / 4);
 }
