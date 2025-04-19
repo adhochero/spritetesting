@@ -21,13 +21,17 @@ const userImageSize = 25;
 
 let users = {};
 let localUserPosition = { x: 333, y: 333 };
+let playerStates = {};
+let animatedSprites = {};
 const localUserId = crypto.randomUUID();
 
 const drawnPositions = {};
 let positionSpeed = 1.5;
 
 let player;
-let lastDirectionX = 1;
+let playerState = {
+    lastDirectionX: 1
+};
 const playerIdleImage = new Image();
 playerIdleImage.src = './assets/idle.png';
 const playerRunImage = new Image();
@@ -122,7 +126,10 @@ function initNetworking(){
                     // Preserve existing data if available, only update if missing
                     user_position: users[presence.user_id]?.user_position 
                                 || presence.user_position 
-                                || { x: 0, y: 0 }
+                                || { x: 0, y: 0 },
+                    lastDirectionX: users[presence.user_id]?.lastDirectionX 
+                                    || presence.lastDirectionX 
+                                    || 0
                 };
             });
         });
@@ -133,7 +140,8 @@ function initNetworking(){
         newPresences.forEach(presence => {
             if (!users[presence.user_id]) {
                 users[presence.user_id] = {
-                    user_position: presence.user_position || { x: 0, y: 0 }
+                    user_position: presence.user_position || { x: 0, y: 0 },
+                    lastDirectionX: presence.lastDirectionX || 0
                 };
             }
         });
@@ -149,7 +157,8 @@ function initNetworking(){
     channel.on('broadcast', { event: 'user_move' }, ({ payload }) => {
         if (payload.user_id !== localUserId) {  // Don't update our own position from broadcasts
             users[payload.user_id] = {
-                user_position: payload.user_position
+                user_position: payload.user_position,
+                lastDirectionX: payload.lastDirectionX
             };
         }
     });
@@ -160,6 +169,7 @@ function initNetworking(){
             channel.track({
                 user_id: localUserId,
                 user_position: localUserPosition,
+                lastDirectionX: playerStates[localUserId]?.lastDirectionX || 0
             });
         }
     });
@@ -200,6 +210,9 @@ function update(timeStamp) {
         moved = true;
     }
 
+    playerStates[localUserId] = playerStates[localUserId] || {};  // Ensure the user state exists
+    playerStates[localUserId].lastDirectionX = 1;  // Example, set to the direction you're tracking
+
     // thottle my network updates
     const now = Date.now();
     if (moved && now - lastUpdate > 200) {
@@ -209,6 +222,7 @@ function update(timeStamp) {
         channel.track({
             user_id: localUserId,
             user_position: localUserPosition,
+            lastDirectionX: playerStates[localUserId]?.lastDirectionX || 0
         });
 
         // Broadcast user position to others
@@ -218,6 +232,7 @@ function update(timeStamp) {
             payload: {
                 user_id: localUserId,
                 user_position: localUserPosition,
+                lastDirectionX: playerStates[localUserId]?.lastDirectionX || 0
             },
         });
     }
@@ -246,29 +261,67 @@ function update(timeStamp) {
     Object.entries(users).forEach(([id, data]) => {
         if(id === localUserId) return;
 
-            // Initialize the drawn position if it doesn't exist
-            if (!drawnPositions[id]) {
-                drawnPositions[id] = {
-                    x: data.user_position.x,
-                    y: data.user_position.y
-                };
-            }
+        // Initialize the drawn position if it doesn't exist
+        if (!drawnPositions[id]) {
+            drawnPositions[id] = {
+                x: data.user_position.x,
+                y: data.user_position.y
+            };
+        }
+
+        // Initialize player state
+        if (!playerStates[id]) {
+            playerStates[id] = {
+                lastDirectionX: 1
+            };
+        }
+
+        // Initialize animated sprite for the player (only once)
+        if (!animatedSprites[id]) {
+            animatedSprites[id] = new AnimatedSprite(playerIdleImage, 2, 5, 1, 2, 5, 333, 333, .42, false, true, true);;
+        }
 
         // Apply lerp to smooth the movement
         // drawnPositions[id].x = lerp(drawnPositions[id].x, data.user_position.x, positionSpeed * deltaTime);
         // drawnPositions[id].y = lerp(drawnPositions[id].y, data.user_position.y, positionSpeed * deltaTime);
 
-        // Apply damp to smooth the movement
-        function damp(current, target, lambda, dt) {
-            return current + (target - current) * (1 - Math.exp(-lambda * dt));
+        // // Damp movement for smooth interpolation
+        // function damp(current, target, lambda, dt) {
+        //     return current + (target - current) * (1 - Math.exp(-lambda * dt));
+        // }
+        // // Then apply damp
+        // drawnPositions[id].x = damp(drawnPositions[id].x, data.user_position.x, positionSpeed, deltaTime);
+        // drawnPositions[id].y = damp(drawnPositions[id].y, data.user_position.y, positionSpeed, deltaTime);
+        
+        function moveTowards(current, target, maxDistanceDelta) {
+            const delta = target - current;
+            if (Math.abs(delta) <= maxDistanceDelta) {
+                return target; // close enough, snap to target
+            }
+            return current + Math.sign(delta) * maxDistanceDelta;
         }
-          
-        // Then apply
-        drawnPositions[id].x = damp(drawnPositions[id].x, data.user_position.x, positionSpeed, deltaTime);
-        drawnPositions[id].y = damp(drawnPositions[id].y, data.user_position.y, positionSpeed, deltaTime);
-          
+        drawnPositions[id].x = moveTowards(drawnPositions[id].x, data.user_position.x, 88 * deltaTime);
+        drawnPositions[id].y = moveTowards(drawnPositions[id].y, data.user_position.y, 88 * deltaTime);
 
-        drawUser(drawnPositions[id], id, userImage, userImageSize);
+
+        // Calculate movement direction (needed for animation angle)
+        const directionX = data.user_position.x - drawnPositions[id].x;
+        const directionY = data.user_position.y - drawnPositions[id].y;
+
+        // drawUser(drawnPositions[id], id, userImage, userImageSize);
+
+        drawAnimatedSpritePlayer(
+            id,
+            animatedSprites[id],
+            drawnPositions[id].x,
+            drawnPositions[id].y,
+            directionX,
+            directionY,
+            playerStates[id],
+            playerIdleImage,
+            playerRunImage,
+            deltaTime
+        );
     });
 
     // drawUser(localUserPosition, localUserId, userImage, userImageSize);
@@ -280,7 +333,7 @@ function update(timeStamp) {
         localUserPosition.y,
         inputDirection.x,
         inputDirection.y,
-        lastDirectionX,
+        playerState,
         playerIdleImage,
         playerRunImage,
         deltaTime
@@ -417,7 +470,7 @@ function drawAnimatedSpritePlayer(
     positionY,
     directionX,
     directionY,
-    lastDirectionX,
+    playerState,
     idleImage,
     runImage,
     deltaTime
@@ -425,15 +478,18 @@ function drawAnimatedSpritePlayer(
     context.save(); // Save current state
     animatedSprite.x = positionX;
     animatedSprite.y = positionY;
-    if(directionX !== 0) lastDirectionX = directionX;
+    if(directionX !== 0) playerState.lastDirectionX = directionX;
 
-    if (lastDirectionX < 0) {
+    // horizontal flip for reverse direction
+    if (playerState.lastDirectionX < 0) {
         context.translate(animatedSprite.x * 2, 0);
         context.scale(-1, 1);
     }
 
-    let isMoving = directionX !== 0 || directionY !== 0;
+    const epsilon = 0.01; // or 0.001 depending on how precise you want it
+    let isMoving = Math.abs(directionX) > epsilon || Math.abs(directionY) > epsilon;
 
+    // change spritesheet for state
     if (isMoving && animatedSprite.spriteSheet !== runImage) {
         animatedSprite.setSpriteSheet(runImage, 4, 5, animatedSprite.currentRow, 4, 0.18);
     } else if (!isMoving && animatedSprite.spriteSheet !== idleImage) {
@@ -460,7 +516,7 @@ function drawAnimatedSpritePlayer(
     }
     animatedSprite.update(deltaTime);
     animatedSprite.drawSprite(context);
-    context.restore(); // Restore canvas to unrotated state
+    context.restore(); // Restore canvas to unchanged state
 
     context.fillStyle = 'black';
     context.font = '12px Xirod';
