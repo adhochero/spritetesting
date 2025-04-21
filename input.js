@@ -30,10 +30,8 @@ export class Input {
     }
 
     addEventListeners() {
-        this.canvas.style.touchAction = 'none';
-
         // Pointer events (mouse + touch)
-        window.addEventListener('pointerdown', this.handleDown);
+        this.canvas.addEventListener('pointerdown', this.handleDown);
         window.addEventListener('pointermove', this.handleMove);
         window.addEventListener('pointerup', this.handleUp);
         window.addEventListener('pointercancel', this.handleUp);
