@@ -267,7 +267,7 @@ function update(timeStamp) {
         const x = isLocal ? localUserPosition.x : data.user_position.x;
         const y = isLocal ? localUserPosition.y : data.user_position.y;
 
-        if (true) {
+        if (!isLocal) {
             // Initialize drawn position
             if (!drawnPositions[id]) {
                 drawnPositions[id] = { x, y };
