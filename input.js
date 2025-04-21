@@ -31,10 +31,10 @@ export class Input {
 
     addEventListeners() {
         // Pointer events (mouse + touch)
-        this.canvas.addEventListener('pointerdown', this.handleDown);
-        window.addEventListener('pointermove', this.handleMove);
-        window.addEventListener('pointerup', this.handleUp);
-        window.addEventListener('pointercancel', this.handleUp);
+        this.canvas.addEventListener('pointerdown', this.handleDown, { passive: false });
+        window.addEventListener('pointermove', this.handleMove, { passive: false });
+        window.addEventListener('pointerup', this.handleUp, { passive: false });
+        window.addEventListener('pointercancel', this.handleUp, { passive: false });
     }
 
     handleDown(e) {
