@@ -267,7 +267,7 @@ function update(timeStamp) {
         const x = isLocal ? localUserPosition.x : data.user_position.x;
         const y = isLocal ? localUserPosition.y : data.user_position.y;
 
-        if (!isLocal) {
+        if (true) {
             // Initialize drawn position
             if (!drawnPositions[id]) {
                 drawnPositions[id] = { x, y };
@@ -282,10 +282,6 @@ function update(timeStamp) {
             if (!animatedSprites[id]) {
                 animatedSprites[id] = new AnimatedSprite(playerIdleImage, 2, 5, 1, 2, 5, 333, 333, .42, false, true, true);
             }
-
-            // Calculate how far we need to move
-            const dx = x - drawnPositions[id].x;
-            const dy = y - drawnPositions[id].y;
 
             // The time it takes for position updates (in seconds)
             const syncTime = 0.2; // 200ms = 0.2s
