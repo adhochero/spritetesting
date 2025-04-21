@@ -258,87 +258,89 @@ function update(timeStamp) {
     context.translate(camera.x, camera.y);
 
     // Draw other users
+    // Gather all players (including the local player) into one array
+    const allPlayers = [];
+
+    // Add other users
     Object.entries(users).forEach(([id, data]) => {
-        if(id === localUserId) return;
+        const isLocal = id === localUserId;
+        const x = isLocal ? localUserPosition.x : data.user_position.x;
+        const y = isLocal ? localUserPosition.y : data.user_position.y;
 
-        // Initialize the drawn position if it doesn't exist
-        if (!drawnPositions[id]) {
-            drawnPositions[id] = {
-                x: data.user_position.x,
-                y: data.user_position.y
-            };
-        }
-
-        // Initialize player state
-        if (!playerStates[id]) {
-            playerStates[id] = {
-                lastDirectionX: 1
-            };
-        }
-
-        // Initialize animated sprite for the player (only once)
-        if (!animatedSprites[id]) {
-            animatedSprites[id] = new AnimatedSprite(playerIdleImage, 2, 5, 1, 2, 5, 333, 333, .42, false, true, true);;
-        }
-
-        // Apply lerp to smooth the movement
-        // drawnPositions[id].x = lerp(drawnPositions[id].x, data.user_position.x, positionSpeed * deltaTime);
-        // drawnPositions[id].y = lerp(drawnPositions[id].y, data.user_position.y, positionSpeed * deltaTime);
-
-        // // Damp movement for smooth interpolation
-        // function damp(current, target, lambda, dt) {
-        //     return current + (target - current) * (1 - Math.exp(-lambda * dt));
-        // }
-        // // Then apply damp
-        // drawnPositions[id].x = damp(drawnPositions[id].x, data.user_position.x, positionSpeed, deltaTime);
-        // drawnPositions[id].y = damp(drawnPositions[id].y, data.user_position.y, positionSpeed, deltaTime);
-        
-        function moveTowards(current, target, maxDistanceDelta) {
-            const delta = target - current;
-            if (Math.abs(delta) <= maxDistanceDelta) {
-                return target; // close enough, snap to target
+        if (!isLocal) {
+            // Initialize drawn position
+            if (!drawnPositions[id]) {
+                drawnPositions[id] = { x, y };
             }
-            return current + Math.sign(delta) * maxDistanceDelta;
+
+            // Initialize player state
+            if (!playerStates[id]) {
+                playerStates[id] = { lastDirectionX: 1 };
+            }
+
+            // Initialize animated sprite
+            if (!animatedSprites[id]) {
+                animatedSprites[id] = new AnimatedSprite(playerIdleImage, 2, 5, 1, 2, 5, 333, 333, .42, false, true, true);
+            }
+
+            // Calculate how far we need to move
+            const dx = x - drawnPositions[id].x;
+            const dy = y - drawnPositions[id].y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            // The time it takes for position updates (in seconds)
+            const syncTime = 0.2; // 200ms = 0.2s
+
+            // Calculate required speed to cover the distance in `syncTime`
+            const speed = distance / syncTime;
+
+            // Smooth movement
+            drawnPositions[id].x = moveTowards(drawnPositions[id].x, x, speed * deltaTime);
+            drawnPositions[id].y = moveTowards(drawnPositions[id].y, y, speed * deltaTime);
+
+            allPlayers.push({
+                id,
+                isLocal,
+                x: drawnPositions[id].x,
+                y: drawnPositions[id].y,
+                directionX: x - drawnPositions[id].x,
+                directionY: y - drawnPositions[id].y,
+                sprite: animatedSprites[id],
+                state: playerStates[id]
+            });
         }
-        drawnPositions[id].x = moveTowards(drawnPositions[id].x, data.user_position.x, 88 * deltaTime);
-        drawnPositions[id].y = moveTowards(drawnPositions[id].y, data.user_position.y, 88 * deltaTime);
+    });
 
+    // Add local player
+    allPlayers.push({
+        id: localUserId,
+        isLocal: true,
+        x: localUserPosition.x,
+        y: localUserPosition.y,
+        directionX: inputDirection.x,
+        directionY: inputDirection.y,
+        sprite: player,
+        state: playerState
+    });
 
-        // Calculate movement direction (needed for animation angle)
-        const directionX = data.user_position.x - drawnPositions[id].x;
-        const directionY = data.user_position.y - drawnPositions[id].y;
+    // Sort all players by Y position
+    allPlayers.sort((a, b) => a.y - b.y);
 
-        // drawUser(drawnPositions[id], id, userImage, userImageSize);
-
+    // Draw in order
+    allPlayers.forEach(p => {
         drawAnimatedSpritePlayer(
-            id,
-            animatedSprites[id],
-            drawnPositions[id].x,
-            drawnPositions[id].y,
-            directionX,
-            directionY,
-            playerStates[id],
+            p.id,
+            p.sprite,
+            p.x,
+            p.y,
+            p.directionX,
+            p.directionY,
+            p.state,
             playerIdleImage,
             playerRunImage,
             deltaTime
         );
     });
-
-    // drawUser(localUserPosition, localUserId, userImage, userImageSize);
-
-    drawAnimatedSpritePlayer(
-        localUserId,
-        player,
-        localUserPosition.x,
-        localUserPosition.y,
-        inputDirection.x,
-        inputDirection.y,
-        playerState,
-        playerIdleImage,
-        playerRunImage,
-        deltaTime
-    );
-    
 
     // Update and draw all active animations
     activeSprites.forEach(explosion => {
@@ -355,24 +357,6 @@ function update(timeStamp) {
     window.requestAnimationFrame(update);
 }
 
-function drawUser(userPosition, userId, image, size){
-    context.beginPath();
-    context.drawImage(
-        image,
-        userPosition.x - size / 2,
-        userPosition.y - size / 2,
-        size,
-        size
-    );
-    // context.arc(userPosition.x, userPosition.y, 10, 0, Math.PI * 2);
-    // context.fillStyle = 'black';
-    // context.fill();
-    context.fillStyle = 'black';
-    context.font = 'bold 12px Arial';
-    context.textAlign = 'center';
-    context.fillText(userId.substring(0, 6), userPosition.x, userPosition.y - size * 3 / 4);
-}
-
 function adjustCanvasSize() {
     let scaleX = window.innerWidth / canvasResolutionWidth;
     let scaleY = window.innerHeight / canvasResolutionHeight;
@@ -387,8 +371,20 @@ function adjustCanvasSize() {
     canvas.style.height = canvasResolutionHeight * scale + 'px';
 }
 
+function moveTowards(current, target, maxDistanceDelta) {
+    const delta = target - current;
+    if (Math.abs(delta) <= maxDistanceDelta) {
+        return target; // close enough, snap to target
+    }
+    return current + Math.sign(delta) * maxDistanceDelta;
+}
+
 function lerp(start, end, t) {
     return start + (end - start) * t;
+}
+
+function damp(current, target, lambda, dt) {
+    return current + (target - current) * (1 - Math.exp(-lambda * dt));
 }
 
 function drawGrid(offsetX, offsetY) {
