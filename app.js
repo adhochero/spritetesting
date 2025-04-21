@@ -13,25 +13,21 @@ const canvasViewportPercentage = 0.9;
 const canvasResolutionWidth = 666;
 const canvasResolutionHeight = 666;
 
+let lastTimeStamp = 0;
 let lastUpdate = Date.now();
 
-const userImage = new Image();
-userImage.src = './assets/pixel_sphere_16x16.png'; 
-const userImageSize = 25;
-
-let users = {};
-let localUserPosition = { x: 333, y: 333 };
-let playerStates = {};
-let animatedSprites = {};
 const localUserId = crypto.randomUUID();
-
-const drawnPositions = {};
-let positionSpeed = 1.5;
-
-let player;
-let playerState = {
+let localUserPosition = { x: 333, y: 333 };
+let localAnimatedSprite;
+let localPlayerState = {
     lastDirectionX: 1
 };
+
+let users = {};
+const drawnPositions = {};
+let animatedSprites = {};
+let playerStates = {};
+
 const playerIdleImage = new Image();
 playerIdleImage.src = './assets/idle.png';
 const playerRunImage = new Image();
@@ -90,9 +86,6 @@ let localUserSpeed = 150;
 let camera = { x: 0, y: 0 };
 let cameraFollowSpeed = 3;
 
-let lastTimeStamp = 0;
-
-
 let fadeElapsed = 0; //for draw text fade
 
 
@@ -103,7 +96,7 @@ window.addEventListener('load', async () => {
     initNetworking();
     adjustCanvasSize();
 
-    player = new AnimatedSprite(playerIdleImage, 2, 5, 1, 2, 5, 333, 333, .42, false, true, true);
+    localAnimatedSprite = new AnimatedSprite(playerIdleImage, 2, 5, 1, 2, 5, 333, 333, .42, false, true, true);
 
     // Start the animation loop
     window.requestAnimationFrame(update);     
@@ -179,12 +172,7 @@ function update(timeStamp) {
     const maxDeltaTime = 0.1; // Maximum time difference between frames (in seconds)
     const deltaTime = Math.min((timeStamp - lastTimeStamp) / 1000, maxDeltaTime);
     lastTimeStamp = timeStamp;
-
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    context.save();
-    context.beginPath();
-    context.imageSmoothingEnabled = false;
-
+    
     const inputDirection = input.getJoystickValues();
 
     // Smooth input movement using lerp
@@ -241,23 +229,21 @@ function update(timeStamp) {
     camera.x = lerp(camera.x, -localUserPosition.x + canvas.width / 2, cameraFollowSpeed * deltaTime);
     camera.y = lerp(camera.y, -localUserPosition.y + canvas.height / 2, cameraFollowSpeed * deltaTime);
 
+
+    // Set up context for this frames drawings
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.save();
+    context.beginPath();
+    context.imageSmoothingEnabled = false;
+
     // Draw grid
     drawGrid(-(camera.x + canvas.width / 2), -(camera.y + canvas.height / 2));
-
-
-    //fade text
-    fadeElapsed += deltaTime;
-    const fadeDuration = 3;
-    let t = Math.min(fadeElapsed / fadeDuration, 1); // Normalize to [0,1]
-    let easedT = Math.pow(t, 3); // ease-in cubic
-    let alpha = lerp(1, 0, easedT); // Fade from 1 → 0
-    drawText(-250, -125, Math.PI / 2, 'bold 64px Xirod', `RGBA(255, 53, 94, ${alpha})`, 'begin');
-
 
     // Apply camera transform
     context.translate(camera.x, camera.y);
 
-    // Draw other users
+    // --- DRAW IN WOLRD ---
+
     // Gather all players (including the local player) into one array
     const allPlayers = [];
 
@@ -315,8 +301,8 @@ function update(timeStamp) {
         y: localUserPosition.y,
         directionX: inputDirection.x,
         directionY: inputDirection.y,
-        sprite: player,
-        state: playerState
+        sprite: localAnimatedSprite,
+        state: localPlayerState
     });
 
     // Sort all players by Y position
@@ -347,8 +333,18 @@ function update(timeStamp) {
     // Remove finished non-looping animations
     activeSprites = activeSprites.filter(explosion => !(explosion.finished && !explosion.loop));
 
-
     context.restore();
+
+    // --- DRAW UI ---
+
+    //fade text
+    fadeElapsed += deltaTime;
+    const fadeDuration = 3;
+    let t = Math.min(fadeElapsed / fadeDuration, 1); // Normalize to [0,1]
+    let easedT = Math.pow(t, 3); // ease-in cubic
+    let alpha = lerp(1, 0, easedT); // Fade from 1 → 0
+    drawText(-250, -125, Math.PI / 2, 'bold 64px Xirod', `RGBA(255, 53, 94, ${alpha})`, 'begin');
+
 
     window.requestAnimationFrame(update);
 }
@@ -375,10 +371,6 @@ function moveTowards(current, target, maxDistanceDelta) {
 
 function lerp(start, end, t) {
     return start + (end - start) * t;
-}
-
-function damp(current, target, lambda, dt) {
-    return current + (target - current) * (1 - Math.exp(-lambda * dt));
 }
 
 function drawGrid(offsetX, offsetY) {
