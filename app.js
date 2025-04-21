@@ -199,8 +199,7 @@ function update(timeStamp) {
     }
 
     playerStates[localUserId] = playerStates[localUserId] || {};  // Ensure the user state exists
-    playerStates[localUserId].lastDirectionX = 1;  // Example, set to the direction you're tracking
-
+   
     // thottle my network updates
     const now = Date.now();
     if (moved && now - lastUpdate > 200) {
