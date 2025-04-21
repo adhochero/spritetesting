@@ -128,8 +128,8 @@ function initNetworking(){
                                 || presence.user_position 
                                 || { x: 0, y: 0 },
                     lastDirectionX: users[presence.user_id]?.lastDirectionX 
-                                    || presence.lastDirectionX 
-                                    || 0
+                                || presence.lastDirectionX 
+                                || 0
                 };
             });
         });
@@ -286,17 +286,17 @@ function update(timeStamp) {
             // Calculate how far we need to move
             const dx = x - drawnPositions[id].x;
             const dy = y - drawnPositions[id].y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
 
             // The time it takes for position updates (in seconds)
             const syncTime = 0.2; // 200ms = 0.2s
 
-            // Calculate required speed to cover the distance in `syncTime`
-            const speed = distance / syncTime;
+            // Smooth X and Y individually based on their deltas, not total distance.
+            const speedX = Math.abs(x - drawnPositions[id].x) / syncTime;
+            const speedY = Math.abs(y - drawnPositions[id].y) / syncTime;
 
-            // Smooth movement
-            drawnPositions[id].x = moveTowards(drawnPositions[id].x, x, speed * deltaTime);
-            drawnPositions[id].y = moveTowards(drawnPositions[id].y, y, speed * deltaTime);
+            // Get inbtween positions
+            drawnPositions[id].x = moveTowards(drawnPositions[id].x, x, speedX * deltaTime);
+            drawnPositions[id].y = moveTowards(drawnPositions[id].y, y, speedY * deltaTime);
 
             allPlayers.push({
                 id,
@@ -373,9 +373,7 @@ function adjustCanvasSize() {
 
 function moveTowards(current, target, maxDistanceDelta) {
     const delta = target - current;
-    if (Math.abs(delta) <= maxDistanceDelta) {
-        return target; // close enough, snap to target
-    }
+    if (Math.abs(delta) <= maxDistanceDelta) return target; // close enough, snap to target
     return current + Math.sign(delta) * maxDistanceDelta;
 }
 
