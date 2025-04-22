@@ -167,6 +167,7 @@ function initNetworking(){
         if (payload.target_user_id === localUserId) {
             velocity = payload.velocity;
             console.log(`Received knockback:`, payload.velocity);
+            triggerExplosion(localUserPosition.x, localUserPosition.y);
         }
     });
 
