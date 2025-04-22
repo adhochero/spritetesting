@@ -84,7 +84,6 @@ export class Input {
         // Check for quick press
         if (!this.isMoving && pressDuration < this.quickPressThreshold) {
             this.quickPress(this.startX, this.startY);  // Pass coordinates
-            navigator.vibrate(30);
         }
         
         this.isDown = false;
