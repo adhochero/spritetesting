@@ -51,6 +51,7 @@ input.onLongPress = (x, y) => {
     }
     else {
         console.log('You are not within range of LongPress.');
+        
     }
 };
 
