@@ -353,15 +353,36 @@ function update(timeStamp) {
 
     //fade text
     fadeElapsed += deltaTime;
-    const fadeDuration = 3;
-    let t = Math.min(fadeElapsed / fadeDuration, 1); // Normalize to [0,1]
-    let easedT = Math.pow(t, 3); // ease-in cubic
-    let alpha = lerp(1, 0, easedT); // Fade from 1 → 0
-    drawText(-250, -125, Math.PI / 2, 'bold 64px Xirod', `RGBA(255, 53, 94, ${alpha})`, 'begin');
+    const fadeDuration = 4;
 
+    if (fadeElapsed <= fadeDuration) {
+    // Phase 1: Fade out first text
+    let t = Math.min(fadeElapsed / fadeDuration, 1);
+    let easedT = Math.pow(t, 3); // ease-in
+    let alpha = lerp(1, 0, easedT);
+    drawText(0, -125, 0/*Math.PI / 2*/, 'bold 64px Xirod', `RGBA(255, 53, 94, ${alpha})`, 'begin');
+    } else if (fadeElapsed <= fadeDuration * 2) {
+        // Phase 2: Fade in then out second text
+        let t = (fadeElapsed - fadeDuration) / fadeDuration;
 
-    window.requestAnimationFrame(update);
-}
+        let alpha;
+        if (t < 0.5) {
+            // Fade in (ease-in)
+            let fadeInT = t / 0.5; // normalize to [0,1]
+            let easedIn = Math.pow(fadeInT, 1);
+            alpha = lerp(0, 1, easedIn);
+        } else {
+            // Fade out (ease-out)
+            let fadeOutT = (t - 0.5) / 0.5; // normalize to [0,1]
+            let easedOut = 1 - Math.pow(1 - fadeOutT, 3);
+            alpha = lerp(1, 0, easedOut);
+        }
+
+        drawText(0, -125, 0, 'bold 24px Xirod', `RGBA(255, 53, 94, ${alpha})`, 'Touch and drag to move.');
+    }
+
+        window.requestAnimationFrame(update);
+    }
 
 function adjustCanvasSize() {
     let scaleX = window.innerWidth / canvasResolutionWidth;
