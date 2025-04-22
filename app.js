@@ -51,13 +51,6 @@ input.onLongPress = (x, y) => {
     }
     else {
         console.log('You are not within range of LongPress.');
-
-        const dx = worldX - localUserPosition.x;
-        const dy = worldY - localUserPosition.y;
-        const dNormalized = normalize2D(dx, dy);
-        
-        velocity.x = (dNormalized.x) * 500;
-        velocity.y = (dNormalized.y) * 500;
     }
 };
 
@@ -70,6 +63,19 @@ input.onQuickPress = (x, y) => {
     if (closest) {
         console.log(`Quick press: Closest player is ${closest.id} at`, closest.position);
         // You can interact with the closest player here
+        const dx = closest.position.x - worldX;
+        const dy = closest.position.y - worldY;
+        const dNormalized = normalize2D(dx, dy);
+        const force = 500;
+
+        channel.send({
+            type: 'broadcast',
+            event: 'velocity_update',
+            payload: {
+                target_user_id: closest.id,
+                velocity: { x: dNormalized.x * force, y: dNormalized.y * force } // Knockback away from explosion, for example
+            }
+        });
     } else {
         console.log("No player found within range of QuickPress.");
     }
@@ -153,6 +159,13 @@ function initNetworking(){
                 user_position: payload.user_position,
                 lastDirectionX: payload.lastDirectionX
             };
+        }
+    });
+
+    channel.on('broadcast', { event: 'velocity_update' }, ({ payload }) => {
+        if (payload.target_user_id === localUserId) {
+            velocity = payload.velocity;
+            console.log(`Received knockback:`, payload.velocity);
         }
     });
 
