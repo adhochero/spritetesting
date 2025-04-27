@@ -360,7 +360,7 @@ function update(timeStamp) {
     let t = Math.min(fadeElapsed / fadeDuration, 1);
     let easedT = Math.pow(t, 3); // ease-in
     let alpha = lerp(1, 0, easedT);
-    drawText(0, -125, 0/*Math.PI / 2*/, 'bold 64px Xirod', `RGBA(255, 53, 94, ${alpha})`, 'begin');
+    drawText(0, -125, 0/*Math.PI / 2*/, 'bold 64px Xirod', `RGBA(255, 53, 94, ${alpha})`, `"game Title"`);
     } else if (fadeElapsed <= fadeDuration * 2) {
         // Phase 2: Fade in then out second text
         let t = (fadeElapsed - fadeDuration) / fadeDuration;
