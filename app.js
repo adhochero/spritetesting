@@ -40,6 +40,17 @@ explosionImage.src = './assets/explosion.png';
 let input = new Input(canvas);
 input.addEventListeners();
 
+let inputSmoothing = { x: 0, y: 0 };
+let velocity = { x: 0, y: 0 };
+let moveDirection = { x: 0, y: 0 };
+let inputResponsiveness = 6;
+let localUserSpeed = 150;
+
+let camera = { x: 0, y: 0 };
+let cameraFollowSpeed = 3;
+
+let fadeElapsed = 0; //for draw text fade
+
 // Assign functions with coordinate parameters
 input.onLongPress = (x, y) => {
     const worldX = x - camera.x; // Get real-world coordinates
@@ -51,7 +62,12 @@ input.onLongPress = (x, y) => {
     }
     else {
         console.log('You are not within range of LongPress.');
-        
+        const dx = worldX - localUserPosition.x;
+        const dy = worldY - localUserPosition.y;
+        const dNormalized = normalize2D(dx, dy);
+        const force = 1000;
+        const velo = { x: dNormalized.x * force, y: dNormalized.y * force };
+        velocity = velo;
     }
 };
 
@@ -83,17 +99,6 @@ input.onQuickPress = (x, y) => {
 
     triggerExplosion(worldX, worldY);
 };
-
-let inputSmoothing = { x: 0, y: 0 };
-let velocity = { x: 0, y: 0 };
-let moveDirection = { x: 0, y: 0 };
-let inputResponsiveness = 6;
-let localUserSpeed = 150;
-
-let camera = { x: 0, y: 0 };
-let cameraFollowSpeed = 3;
-
-let fadeElapsed = 0; //for draw text fade
 
 
 window.addEventListener('resize', adjustCanvasSize);
