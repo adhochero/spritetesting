@@ -32,31 +32,51 @@ body{
     src: url('./assets/3x3Font.otf') format('opentype');
 }
 
+/* One source of truth for the picker's scale, so the track, thumb and label all
+   grow together. The coarse-pointer bump below is the only thing that changes. */
 #colorPicker{
+    --track-height: 26px;
+    --thumb-width: 22px;
+    --thumb-height: 40px;
+    --slider-width: 210px;
+
     position: absolute;
-    top: 12px;
-    right: 12px;
+    top: 16px;
+    right: 16px;
     z-index: 10;
 
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 10px;
+    gap: 16px;
+    padding: 18px;
 
     background-color: rgba(0, 0, 0, 0.55);
-    border-radius: 6px;
+    border-radius: 10px;
 
     /* body sets touch-action: none for the joystick, re-enable it for the sliders */
     touch-action: auto;
 }
 
+/* Touch devices get a chunkier thumb to grab */
+@media (pointer: coarse){
+    #colorPicker{
+        --track-height: 32px;
+        --thumb-width: 30px;
+        --thumb-height: 48px;
+        --slider-width: 190px;
+
+        gap: 20px;
+    }
+}
+
 #colorPicker label{
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
 
+    /* 3x3 is a wide face, so this reads bigger than the number suggests */
     font-family: '3x3', monospace;
-    font-size: 14px;
+    font-size: 19px;
     color: rgb(255, 53, 94);
 }
 
@@ -64,7 +84,7 @@ body{
    spilling over the slider */
 #colorPicker label span{
     flex: 0 0 auto;
-    min-width: 44px;
+    min-width: 58px;
 }
 
 /* appearance: none hands the track over to us, so the element's own background
@@ -73,12 +93,12 @@ body{
     -webkit-appearance: none;
     appearance: none;
 
-    width: 110px;
-    height: 12px;
+    width: var(--slider-width);
+    height: var(--track-height);
     margin: 0;
 
     border: 1px solid rgba(255, 255, 255, 0.5);
-    border-radius: 3px;
+    border-radius: 999px; /* pill: clips the gradient to rounded ends */
     background: rgb(255, 255, 255);
 
     touch-action: auto;
@@ -87,31 +107,34 @@ body{
 
 #colorPicker input[type="range"]::-webkit-slider-runnable-track{
     -webkit-appearance: none;
-    height: 12px;
+    height: 100%;
     background: transparent;
 }
 
+/* the thumb is taller than the track, so pull it up by half the difference
+   (the 2px border sits outside the declared height) */
 #colorPicker input[type="range"]::-webkit-slider-thumb{
     -webkit-appearance: none;
-    width: 6px;
-    height: 16px;
-    margin-top: -3px; /* centres the thumb on the 12px track */
+    width: var(--thumb-width);
+    height: var(--thumb-height);
+    margin-top: calc((var(--track-height) - var(--thumb-height)) / 2 - 3px);
 
-    border: 1px solid rgb(0, 0, 0);
-    border-radius: 2px;
+    border: 2px solid rgb(0, 0, 0);
+    border-radius: 999px;
     background: rgb(255, 255, 255);
 }
 
 #colorPicker input[type="range"]::-moz-range-track{
-    height: 12px;
+    height: 100%;
     background: transparent;
 }
 
 #colorPicker input[type="range"]::-moz-range-thumb{
-    width: 6px;
-    height: 16px;
+    width: var(--thumb-width);
+    height: var(--thumb-height);
+    box-sizing: border-box;
 
-    border: 1px solid rgb(0, 0, 0);
-    border-radius: 2px;
+    border: 2px solid rgb(0, 0, 0);
+    border-radius: 999px;
     background: rgb(255, 255, 255);
 }

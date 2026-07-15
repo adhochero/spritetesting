@@ -55,9 +55,15 @@ const briSlider = document.getElementById('briSlider');
 const playerHitRadius = 24; // frame is 16px drawn at spriteScale => 48px, so half of that
 const respawnDelay = 3; // seconds to hold the last death frame before respawning
 
+// On respawn the player pulses between semi-transparent and opaque before settling
+const respawnFlashDuration = 1.2; // seconds
+const respawnFlashPulses = 3;
+const respawnFlashMinAlpha = 0.25;
+
 let isAlive = true;
 let deathAnimatedSprite = null;
 let respawnTimer = 0;
+let respawnFlashTimer = 0;
 
 let input = new Input(canvas);
 input.addEventListeners();
@@ -147,7 +153,10 @@ function update(timeStamp) {
     // --- DRAW IN WORLD ---
 
     if (isAlive) {
-        // Draw local player
+        // Draw local player, pulsing if it just respawned
+        context.save();
+        context.globalAlpha = getRespawnFlashAlpha(deltaTime);
+
         drawAnimatedSpritePlayer(
             localAnimatedSprite,
             localUserPosition.x,
@@ -159,6 +168,8 @@ function update(timeStamp) {
             playerRunSheet,
             deltaTime
         );
+
+        context.restore();
     } else {
         deathAnimatedSprite.x = localUserPosition.x;
         deathAnimatedSprite.y = localUserPosition.y;
@@ -275,9 +286,22 @@ function getSquaredDistance(x1, y1, x2, y2) {
     return dx * dx + dy * dy;
 }
 
+// Cosine wave so the pulse eases rather than strobes. It both starts and lands on
+// 1.0, so the player fades back in and finishes fully opaque.
+function getRespawnFlashAlpha(deltaTime) {
+    if (respawnFlashTimer <= 0) return 1;
+
+    respawnFlashTimer = Math.max(0, respawnFlashTimer - deltaTime);
+
+    const progress = 1 - respawnFlashTimer / respawnFlashDuration;
+    const wave = (Math.cos(progress * respawnFlashPulses * Math.PI * 2) + 1) / 2;
+    return lerp(respawnFlashMinAlpha, 1, wave);
+}
+
 function killPlayer() {
     isAlive = false;
     respawnTimer = 0;
+    respawnFlashTimer = 0; // dying mid-pulse cancels it
 
     // Play one of the two death animations at random, once, holding the last frame
     const sheet = deathSheets[Math.floor(Math.random() * deathSheets.length)];
@@ -297,6 +321,7 @@ function respawnPlayer() {
     isAlive = true;
     deathAnimatedSprite = null;
     respawnTimer = 0;
+    respawnFlashTimer = respawnFlashDuration;
 
     localAnimatedSprite.setSpriteSheet(playerIdleSheet, 4, 5, 5, 4, 0.2);
     localAnimatedSprite.isPlaying = true;
