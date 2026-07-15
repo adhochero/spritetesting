@@ -1,12 +1,6 @@
 import { Input } from './input.js';
 import { AnimatedSprite } from './animatedSprite.js';
 
-const supabaseUrl = 'https://gqbeyhseepsnhxjblxzh.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdxYmV5aHNlZXBzbmh4amJseHpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI3Njk5NDksImV4cCI6MjA1ODM0NTk0OX0.c-3qmp9WTVOEVMlJnSS4b128roCBHd978t3lGebWq4s';
-const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
-
-let channel = null;
-
 const canvas = document.getElementById('gameCanvas');
 const context = canvas.getContext('2d');
 const canvasViewportPercentage = 0.9;
@@ -14,34 +8,61 @@ const canvasResolutionWidth = 666;
 const canvasResolutionHeight = 666;
 
 let lastTimeStamp = 0;
-let lastUpdate = Date.now();
 
-const localUserId = crypto.randomUUID();
 let localUserPosition = { x: 333, y: 333 };
 let localAnimatedSprite;
 let localPlayerState = {
     lastDirectionX: 1
 };
 
-let users = {};
-const drawnPositions = {};
-let animatedSprites = {};
-let playerStates = {};
+function loadImage(src) {
+    const image = new Image();
+    image.src = src;
+    return image;
+}
 
-const playerIdleImage = new Image();
-playerIdleImage.src = './assets/idle.png';
-const playerRunImage = new Image();
-playerRunImage.src = './assets/run.png';
+// Sprite sheets are 64x80 => 4 columns x 5 rows of 16x16 frames, 4 frames per row.
+// Rows top-to-bottom: North, North-East, East, South-East, South.
+// West directions reuse the East-side rows, flipped horizontally.
+const spriteScale = 3;
 
-let activeSprites = [];
-const explosionImage = new Image();
-explosionImage.src = './assets/explosion.png'; 
+const playerIdleImage = loadImage('./assets/Base_Idle_8D.png');
+const playerRunImage = loadImage('./assets/Base_Walk_8D.png');
+
+// Death sheets are 64x32 => 4 columns x 2 rows of 16x16 frames, 8 frames played end to end.
+const deathImages = [
+    loadImage('./assets/Base_Death_Kneel.png'),
+    loadImage('./assets/Base_Death_Roll.png')
+];
+
+// Every sheet the player is drawn from gets a tinted offscreen copy. The sprites are
+// drawn from these canvases, so re-tinting in place recolors the player instantly and
+// keeps the sheet-swap identity checks in drawAnimatedSpritePlayer working.
+const playerIdleSheet = document.createElement('canvas');
+const playerRunSheet = document.createElement('canvas');
+const deathSheets = deathImages.map(() => document.createElement('canvas'));
+
+const tintTargets = [
+    { source: playerIdleImage, target: playerIdleSheet },
+    { source: playerRunImage, target: playerRunSheet },
+    ...deathImages.map((source, i) => ({ source, target: deathSheets[i] }))
+];
+
+const hueSlider = document.getElementById('hueSlider');
+const satSlider = document.getElementById('satSlider');
+const briSlider = document.getElementById('briSlider');
+
+const playerHitRadius = 24; // frame is 16px drawn at spriteScale => 48px, so half of that
+const respawnDelay = 3; // seconds to hold the last death frame before respawning
+
+let isAlive = true;
+let deathAnimatedSprite = null;
+let respawnTimer = 0;
 
 let input = new Input(canvas);
 input.addEventListeners();
 
 let inputSmoothing = { x: 0, y: 0 };
-let velocity = { x: 0, y: 0 };
 let moveDirection = { x: 0, y: 0 };
 let inputResponsiveness = 6;
 let localUserSpeed = 150;
@@ -49,199 +70,61 @@ let localUserSpeed = 150;
 let camera = { x: 0, y: 0 };
 let cameraFollowSpeed = 3;
 
-let fadeElapsed = 0; //for draw text fade
-
-// Assign functions with coordinate parameters
-input.onLongPress = (x, y) => {
-    const worldX = x - camera.x; // Get real-world coordinates
-    const worldY = y - camera.y;
-
-    const maxRangeSq = 30 * 30;
-    if (getSquaredDistance(localUserPosition.x, localUserPosition.y, worldX, worldY) <= maxRangeSq){
-        console.log('This is you.')
-    }
-    else {
-        console.log('You are not within range of LongPress.');
-        const dx = worldX - localUserPosition.x;
-        const dy = worldY - localUserPosition.y;
-        const dNormalized = normalize2D(dx, dy);
-        const force = 1000;
-        const velo = { x: dNormalized.x * force, y: dNormalized.y * force };
-        velocity = velo;
-    }
-};
-
+// Clicking on the character kills it
 input.onQuickPress = (x, y) => {
-    const worldX = x - camera.x; // Get real-world coordinates
+    if (!isAlive) return;
+
+    // Convert from canvas space to world space
+    const worldX = x - camera.x;
     const worldY = y - camera.y;
 
-    const closest = getClosestUser(worldX, worldY, 30);
-
-    if (closest) {
-        console.log(`Quick press: Closest player is ${closest.id} at`, closest.position);
-        // You can interact with the closest player here
-        const dx = closest.position.x - worldX;
-        const dy = closest.position.y - worldY;
-        const dNormalized = normalize2D(dx, dy);
-        const force = 500;
-
-        channel.send({
-            type: 'broadcast',
-            event: 'velocity_update',
-            payload: {
-                target_user_id: closest.id,
-                velocity: { x: dNormalized.x * force, y: dNormalized.y * force } // Knockback away from explosion, for example
-            }
-        });
-    } else {
-        console.log("No player found within range of QuickPress.");
+    if (getSquaredDistance(localUserPosition.x, localUserPosition.y, worldX, worldY) <= playerHitRadius * playerHitRadius) {
+        killPlayer();
     }
-
-    triggerExplosion(worldX, worldY);
 };
-
 
 window.addEventListener('resize', adjustCanvasSize);
 window.addEventListener('orientationchange', adjustCanvasSize);
 
 window.addEventListener('load', async () => {
-    initNetworking();
     adjustCanvasSize();
 
-    localAnimatedSprite = new AnimatedSprite(playerIdleImage, 2, 5, 1, 2, 5, 333, 333, .42, false, true, true);
+    // The sheets have to be decoded before they can be tinted into the offscreen canvases
+    await Promise.all(tintTargets.map(({ source }) => source.decode().catch(() => {})));
+    applyPlayerColor();
+
+    [hueSlider, satSlider, briSlider].forEach(slider => {
+        slider.addEventListener('input', applyPlayerColor);
+    });
+
+    localAnimatedSprite = new AnimatedSprite(playerIdleSheet, 4, 5, 5, 4, spriteScale, 333, 333, .2, false, true, true);
 
     // Start the animation loop
-    window.requestAnimationFrame(update);     
+    window.requestAnimationFrame(update);
 });
-
-function initNetworking(){
-    // Channel for presence and broadcast
-    channel = supabase.channel('user_tracking', {
-        config: { presence: { key: 'user_id' } }
-    });
-
-    // Setup presence tracking
-    channel
-    .on('presence', { event: 'sync' }, () => {
-        // Efficiently rebuild the users object only when absolutely needed
-        const newUsers = {};
-        Object.values(channel.presenceState()).forEach(presences => {
-            presences.forEach(presence => {
-                newUsers[presence.user_id] = {
-                    // Preserve existing data if available, only update if missing
-                    user_position: users[presence.user_id]?.user_position 
-                                || presence.user_position 
-                                || { x: 0, y: 0 },
-                    lastDirectionX: users[presence.user_id]?.lastDirectionX 
-                                || presence.lastDirectionX 
-                                || 0
-                };
-            });
-        });
-        users = newUsers; // Atomic swap
-    })
-    .on('presence', { event: 'join' }, ({ newPresences }) => {
-        // Only add truly new users (not already tracked)
-        newPresences.forEach(presence => {
-            if (!users[presence.user_id]) {
-                users[presence.user_id] = {
-                    user_position: presence.user_position || { x: 0, y: 0 },
-                    lastDirectionX: presence.lastDirectionX || 0
-                };
-            }
-        });
-    })
-    .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-        // Immediate cleanup
-        leftPresences.forEach(presence => {
-            delete users[presence.user_id];
-        });
-    });
-
-    // Handle broadcast messages
-    channel.on('broadcast', { event: 'user_move' }, ({ payload }) => {
-        if (payload.user_id !== localUserId) {  // Don't update our own position from broadcasts
-            users[payload.user_id] = {
-                user_position: payload.user_position,
-                lastDirectionX: payload.lastDirectionX
-            };
-        }
-    });
-
-    channel.on('broadcast', { event: 'velocity_update' }, ({ payload }) => {
-        if (payload.target_user_id === localUserId) {
-            velocity = payload.velocity;
-            console.log(`Received knockback:`, payload.velocity);
-            triggerExplosion(localUserPosition.x, localUserPosition.y);
-        }
-    });
-
-    // Subscribe to the channel
-    channel.subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-            channel.track({
-                user_id: localUserId,
-                user_position: localUserPosition,
-                lastDirectionX: playerStates[localUserId]?.lastDirectionX || 0
-            });
-        }
-    });
-}
 
 function update(timeStamp) {
     const maxDeltaTime = 0.1; // Maximum time difference between frames (in seconds)
     const deltaTime = Math.min((timeStamp - lastTimeStamp) / 1000, maxDeltaTime);
     lastTimeStamp = timeStamp;
-    
-    const inputDirection = input.getJoystickValues();
+
+    // A dead character ignores input until it respawns
+    const inputDirection = isAlive ? input.getJoystickValues() : { x: 0, y: 0 };
 
     // Smooth input movement using lerp
     inputSmoothing.x = lerp(inputSmoothing.x, inputDirection.x, inputResponsiveness * deltaTime);
     inputSmoothing.y = lerp(inputSmoothing.y, inputDirection.y, inputResponsiveness * deltaTime);
 
-    // Apply velocity falloff
-    velocity.x = lerp(velocity.x, 0, inputResponsiveness * deltaTime);
-    velocity.y = lerp(velocity.y, 0, inputResponsiveness * deltaTime);
-
-    // Combine velocity and input movement
-    moveDirection.x = velocity.x + (inputSmoothing.x * localUserSpeed);
-    moveDirection.y = velocity.y + (inputSmoothing.y * localUserSpeed);
+    // Movement from input
+    moveDirection.x = inputSmoothing.x * localUserSpeed;
+    moveDirection.y = inputSmoothing.y * localUserSpeed;
 
     // Handle local player movement
-    let moved = false;
     if (moveDirection.x != 0) {
         localUserPosition.x += moveDirection.x * deltaTime;
-        moved = true;
     }
     if (moveDirection.y != 0) {
         localUserPosition.y += moveDirection.y * deltaTime;
-        moved = true;
-    }
-
-    playerStates[localUserId] = playerStates[localUserId] || {};  // Ensure the user state exists
-   
-    // thottle my network updates
-    const now = Date.now();
-    if (moved && now - lastUpdate > 200) {
-        lastUpdate = now;
-
-        // Update our presence
-        channel.track({
-            user_id: localUserId,
-            user_position: localUserPosition,
-            lastDirectionX: playerStates[localUserId]?.lastDirectionX || 0
-        });
-
-        // Broadcast user position to others
-        channel.send({
-            type: 'broadcast',
-            event: 'user_move',
-            payload: {
-                user_id: localUserId,
-                user_position: localUserPosition,
-                lastDirectionX: playerStates[localUserId]?.lastDirectionX || 0
-            },
-        });
     }
 
     // Update camera to follow local player
@@ -261,133 +144,38 @@ function update(timeStamp) {
     // Apply camera transform
     context.translate(camera.x, camera.y);
 
-    // --- DRAW IN WOLRD ---
+    // --- DRAW IN WORLD ---
 
-    // Gather all players (including the local player) into one array
-    const allPlayers = [];
-
-    // Add other users
-    Object.entries(users).forEach(([id, data]) => {
-        const isLocal = id === localUserId;
-        const x = isLocal ? localUserPosition.x : data.user_position.x;
-        const y = isLocal ? localUserPosition.y : data.user_position.y;
-
-        if (!isLocal) {
-            // Initialize drawn position
-            if (!drawnPositions[id]) {
-                drawnPositions[id] = { x, y };
-            }
-
-            // Initialize player state
-            if (!playerStates[id]) {
-                playerStates[id] = { lastDirectionX: 1 };
-            }
-
-            // Initialize animated sprite
-            if (!animatedSprites[id]) {
-                animatedSprites[id] = new AnimatedSprite(playerIdleImage, 2, 5, 1, 2, 5, 333, 333, .42, false, true, true);
-            }
-
-            // The time it takes for position updates (in seconds)
-            const syncTime = 0.2; // 200ms = 0.2s
-
-            // Smooth X and Y individually based on their deltas, not total distance.
-            const speedX = Math.abs(x - drawnPositions[id].x) / syncTime;
-            const speedY = Math.abs(y - drawnPositions[id].y) / syncTime;
-
-            // Get inbtween positions
-            drawnPositions[id].x = moveTowards(drawnPositions[id].x, x, speedX * deltaTime);
-            drawnPositions[id].y = moveTowards(drawnPositions[id].y, y, speedY * deltaTime);
-
-            allPlayers.push({
-                id,
-                isLocal,
-                x: drawnPositions[id].x,
-                y: drawnPositions[id].y,
-                directionX: x - drawnPositions[id].x,
-                directionY: y - drawnPositions[id].y,
-                sprite: animatedSprites[id],
-                state: playerStates[id]
-            });
-        }
-    });
-
-    // Add local player
-    allPlayers.push({
-        id: localUserId,
-        isLocal: true,
-        x: localUserPosition.x,
-        y: localUserPosition.y,
-        directionX: inputDirection.x,
-        directionY: inputDirection.y,
-        sprite: localAnimatedSprite,
-        state: localPlayerState
-    });
-
-    // Sort all players by Y position
-    allPlayers.sort((a, b) => a.y - b.y);
-
-    // Draw in order
-    allPlayers.forEach(p => {
+    if (isAlive) {
+        // Draw local player
         drawAnimatedSpritePlayer(
-            p.id,
-            p.sprite,
-            p.x,
-            p.y,
-            p.directionX,
-            p.directionY,
-            p.state,
-            playerIdleImage,
-            playerRunImage,
+            localAnimatedSprite,
+            localUserPosition.x,
+            localUserPosition.y,
+            inputDirection.x,
+            inputDirection.y,
+            localPlayerState,
+            playerIdleSheet,
+            playerRunSheet,
             deltaTime
         );
-    });
+    } else {
+        deathAnimatedSprite.x = localUserPosition.x;
+        deathAnimatedSprite.y = localUserPosition.y;
+        deathAnimatedSprite.update(deltaTime);
+        deathAnimatedSprite.drawSprite(context);
 
-    // Update and draw all active animations
-    activeSprites.forEach(explosion => {
-        explosion.update(deltaTime);
-        explosion.drawSprite(context);
-    });
-
-    // Remove finished non-looping animations
-    activeSprites = activeSprites.filter(explosion => !(explosion.finished && !explosion.loop));
+        // Hold the last frame for respawnDelay, then come back alive
+        if (deathAnimatedSprite.finished) {
+            respawnTimer += deltaTime;
+            if (respawnTimer >= respawnDelay) respawnPlayer();
+        }
+    }
 
     context.restore();
 
-    // --- DRAW UI ---
-
-    //fade text
-    fadeElapsed += deltaTime;
-    const fadeDuration = 4;
-
-    if (fadeElapsed <= fadeDuration) {
-    // Phase 1: Fade out first text
-    let t = Math.min(fadeElapsed / fadeDuration, 1);
-    let easedT = Math.pow(t, 3); // ease-in
-    let alpha = lerp(1, 0, easedT);
-    drawText(0, -125, 0/*Math.PI / 2*/, 'bold 64px Xirod', `RGBA(255, 53, 94, ${alpha})`, `"game Title"`);
-    } else if (fadeElapsed <= fadeDuration * 2) {
-        // Phase 2: Fade in then out second text
-        let t = (fadeElapsed - fadeDuration) / fadeDuration;
-
-        let alpha;
-        if (t < 0.5) {
-            // Fade in (ease-in)
-            let fadeInT = t / 0.5; // normalize to [0,1]
-            let easedIn = Math.pow(fadeInT, 1);
-            alpha = lerp(0, 1, easedIn);
-        } else {
-            // Fade out (ease-out)
-            let fadeOutT = (t - 0.5) / 0.5; // normalize to [0,1]
-            let easedOut = 1 - Math.pow(1 - fadeOutT, 3);
-            alpha = lerp(1, 0, easedOut);
-        }
-
-        drawText(0, -125, 0, 'bold 24px Xirod', `RGBA(255, 53, 94, ${alpha})`, 'Touch and drag to move.');
-    }
-
-        window.requestAnimationFrame(update);
-    }
+    window.requestAnimationFrame(update);
+}
 
 function adjustCanvasSize() {
     let scaleX = window.innerWidth / canvasResolutionWidth;
@@ -403,14 +191,117 @@ function adjustCanvasSize() {
     canvas.style.height = canvasResolutionHeight * scale + 'px';
 }
 
-function moveTowards(current, target, maxDistanceDelta) {
-    const delta = target - current;
-    if (Math.abs(delta) <= maxDistanceDelta) return target; // close enough, snap to target
-    return current + Math.sign(delta) * maxDistanceDelta;
-}
-
 function lerp(start, end, t) {
     return start + (end - start) * t;
+}
+
+// Hue 0-360, saturation/brightness 0-100. The slider defaults (18, 42, 100) are
+// #ffb494; hue 0 / sat 0 / brightness 100 is white, which multiplies to a no-op.
+function hsbToRgbString(h, s, b) {
+    s /= 100;
+    b /= 100;
+
+    const chroma = b * s;
+    const second = chroma * (1 - Math.abs(((h / 60) % 2) - 1));
+    const match = b - chroma;
+
+    let rgb;
+    if (h < 60)       rgb = [chroma, second, 0];
+    else if (h < 120) rgb = [second, chroma, 0];
+    else if (h < 180) rgb = [0, chroma, second];
+    else if (h < 240) rgb = [0, second, chroma];
+    else if (h < 300) rgb = [second, 0, chroma];
+    else              rgb = [chroma, 0, second];
+
+    const [r, g, bl] = rgb.map(v => Math.round((v + match) * 255));
+    return `rgb(${r}, ${g}, ${bl})`;
+}
+
+// Paints `color` over the opaque pixels of `source` into the `target` offscreen canvas.
+// multiply keeps the sprite's black outlines and shading instead of flattening it to a
+// solid silhouette; destination-in then re-applies the sheet's alpha so the fill is
+// clipped to the character and never touches the transparent background.
+function tintSheet(source, target, color) {
+    const width = source.naturalWidth;
+    const height = source.naturalHeight;
+    if (!width || !height) return; // image not decoded yet
+
+    target.width = width;
+    target.height = height;
+
+    const tintContext = target.getContext('2d');
+    tintContext.imageSmoothingEnabled = false;
+
+    tintContext.clearRect(0, 0, width, height);
+    tintContext.globalCompositeOperation = 'source-over';
+    tintContext.drawImage(source, 0, 0);
+
+    tintContext.globalCompositeOperation = 'multiply';
+    tintContext.fillStyle = color;
+    tintContext.fillRect(0, 0, width, height);
+
+    tintContext.globalCompositeOperation = 'destination-in';
+    tintContext.drawImage(source, 0, 0);
+
+    tintContext.globalCompositeOperation = 'source-over';
+}
+
+// Each track previews what its own slider does: the full hue wheel, and saturation /
+// brightness ramps built from the other two values as they currently stand.
+function paintSliderTracks(h, s, b) {
+    const hueStops = [];
+    for (let stop = 0; stop <= 360; stop += 30) {
+        hueStops.push(`${hsbToRgbString(stop, 100, 100)} ${(stop / 360 * 100).toFixed(2)}%`);
+    }
+
+    hueSlider.style.background = `linear-gradient(to right, ${hueStops.join(', ')})`;
+    satSlider.style.background = `linear-gradient(to right, ${hsbToRgbString(h, 0, b)}, ${hsbToRgbString(h, 100, b)})`;
+    briSlider.style.background = `linear-gradient(to right, ${hsbToRgbString(h, s, 0)}, ${hsbToRgbString(h, s, 100)})`;
+}
+
+function applyPlayerColor() {
+    const h = Number(hueSlider.value);
+    const s = Number(satSlider.value);
+    const b = Number(briSlider.value);
+
+    const color = hsbToRgbString(h, s, b);
+    tintTargets.forEach(({ source, target }) => tintSheet(source, target, color));
+    paintSliderTracks(h, s, b);
+}
+
+function getSquaredDistance(x1, y1, x2, y2) {
+    const dx = x1 - x2;
+    const dy = y1 - y2;
+    return dx * dx + dy * dy;
+}
+
+function killPlayer() {
+    isAlive = false;
+    respawnTimer = 0;
+
+    // Play one of the two death animations at random, once, holding the last frame
+    const sheet = deathSheets[Math.floor(Math.random() * deathSheets.length)];
+    deathAnimatedSprite = new AnimatedSprite(
+        sheet, 4, 2, 1, 4, spriteScale,
+        localUserPosition.x, localUserPosition.y,
+        0.12, true, false, false
+    );
+    deathAnimatedSprite.start();
+
+    // Kill any leftover momentum so the corpse doesn't drift
+    inputSmoothing.x = 0;
+    inputSmoothing.y = 0;
+}
+
+function respawnPlayer() {
+    isAlive = true;
+    deathAnimatedSprite = null;
+    respawnTimer = 0;
+
+    localAnimatedSprite.setSpriteSheet(playerIdleSheet, 4, 5, 5, 4, 0.2);
+    localAnimatedSprite.isPlaying = true;
+    localAnimatedSprite.finished = false;
+    localPlayerState.lastDirectionX = 1;
 }
 
 function drawGrid(offsetX, offsetY) {
@@ -436,57 +327,7 @@ function drawGrid(offsetX, offsetY) {
     }
 }
 
-function getClosestUser(x, y, maxRange) {
-    let closestId = null;
-    let closestDistance = Infinity;
-    const maxDistSq = maxRange * maxRange;
-
-    for (const [id, pos] of Object.entries(drawnPositions)) {
-        if (id === localUserId) continue; // Skip the local player
-        
-        const distanceSq = getSquaredDistance(pos.x, pos.y, x, y);
-
-        if (distanceSq < closestDistance && distanceSq <= maxDistSq) {
-            closestDistance = distanceSq;
-            closestId = id;
-        }
-    }
-
-    return closestId ? { id: closestId, position: drawnPositions[closestId] } : null;
-}
-
-function getSquaredDistance(x1, y1, x2, y2) {
-    const dx = x1 - x2;
-    const dy = y1 - y2;
-    return dx * dx + dy * dy;
-}
-
-function normalize2D(x, y) {
-    const length = Math.hypot(x, y); // √(x² + y²)
-    if (length === 0) return { x: 0, y: 0 }; // zero vector stays zero
-    return { x: x / length, y: y / length }; // each component now between -1 and 1
-}
-
-function triggerExplosion(x, y) {
-    let explosion = new AnimatedSprite(explosionImage, 2, 3, 1, 2, 5, x, y, .12, true, false, false);
-    explosion.start(); // start just to be safe
-    activeSprites.push(explosion);
-}
-
-function drawText(offsetX, offsetY, rotation, font, color, text){
-    context.save(); // Save current state
-    context.translate(canvas.width / 2 + offsetX, canvas.height / 2 + offsetY); // Move origin to where you want the text to start
-    context.rotate(rotation); // (Math.PI / 2) = Rotate 90° clockwise
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    context.font = font; // 'size and fontName'
-    context.fillStyle = color; // 'color'
-    context.fillText(text, 0, 0); // 'text'
-    context.restore(); // Restore canvas to unrotated state
-}
-
 function drawAnimatedSpritePlayer(
-    userId,
     animatedSprite,
     positionX,
     positionY,
@@ -511,37 +352,34 @@ function drawAnimatedSpritePlayer(
     const epsilon = 0.01; // or 0.001 depending on how precise you want it
     let isMoving = Math.abs(directionX) > epsilon || Math.abs(directionY) > epsilon;
 
-    // change spritesheet for state
+    // change spritesheet for state (both sheets are 4 cols x 5 rows, 4 frames per row)
     if (isMoving && animatedSprite.spriteSheet !== runImage) {
-        animatedSprite.setSpriteSheet(runImage, 4, 5, animatedSprite.currentRow, 4, 0.18);
+        animatedSprite.setSpriteSheet(runImage, 4, 5, animatedSprite.currentRow, 4, 0.12);
     } else if (!isMoving && animatedSprite.spriteSheet !== idleImage) {
-        animatedSprite.setSpriteSheet(idleImage, 2, 5, animatedSprite.currentRow, 2, 0.42);
+        animatedSprite.setSpriteSheet(idleImage, 4, 5, animatedSprite.currentRow, 4, 0.2);
     }
 
     // change spritesheet row by angle of movement
-    if (isMoving) {        
+    // Rows: 1=North, 2=North-East, 3=East, 4=South-East, 5=South.
+    // West-facing angles reuse the East-side rows and rely on the horizontal flip above.
+    if (isMoving) {
         let angle = Math.atan2(directionY, directionX);
         let degrees = angle * (180 / Math.PI);
         if (degrees < 0) degrees += 360;
-    
-        let dir = 1;
-        if (degrees >= 337.5 || degrees < 22.5)        dir = 3; // Right
-        else if (degrees >= 22.5 && degrees < 67.5)    dir = 2; // Down-Right
-        else if (degrees >= 67.5 && degrees < 112.5)   dir = 1; // Down
-        else if (degrees >= 112.5 && degrees < 157.5)  dir = 2; // Down-Left
-        else if (degrees >= 157.5 && degrees < 202.5)  dir = 3; // Left
-        else if (degrees >= 202.5 && degrees < 247.5)  dir = 4; // Up-Left
-        else if (degrees >= 247.5 && degrees < 292.5)  dir = 5; // Up
-        else if (degrees >= 292.5 && degrees < 337.5)  dir = 4; // Up-Right
-           
+
+        let dir = 5;
+        if (degrees >= 337.5 || degrees < 22.5)        dir = 3; // East
+        else if (degrees >= 22.5 && degrees < 67.5)    dir = 4; // South-East
+        else if (degrees >= 67.5 && degrees < 112.5)   dir = 5; // South
+        else if (degrees >= 112.5 && degrees < 157.5)  dir = 4; // South-West (flipped South-East)
+        else if (degrees >= 157.5 && degrees < 202.5)  dir = 3; // West (flipped East)
+        else if (degrees >= 202.5 && degrees < 247.5)  dir = 2; // North-West (flipped North-East)
+        else if (degrees >= 247.5 && degrees < 292.5)  dir = 1; // North
+        else if (degrees >= 292.5 && degrees < 337.5)  dir = 2; // North-East
+
         animatedSprite.currentRow = dir;
     }
     animatedSprite.update(deltaTime);
     animatedSprite.drawSprite(context);
     context.restore(); // Restore canvas to unchanged state
-
-    context.fillStyle = 'black';
-    context.font = '12px Xirod';
-    context.textAlign = 'center';
-    context.fillText(userId.substring(0, 6), positionX, positionY - animatedSprite.spriteSheet.naturalHeight * 3 / 4);
 }

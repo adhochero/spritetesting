@@ -76,11 +76,11 @@ export class AnimatedSprite{
     
 
     drawSprite(context){
-        if (!this.isPlaying && this.finished) return;
+        // A finished non-looping animation keeps drawing, holding on its last frame.
 
-        //get frames size based on spritesheet
-        let sheetWidth = this.spriteSheet.naturalWidth;
-        let sheetHeigth = this.spriteSheet.naturalHeight;
+        //get frames size based on spritesheet (Image has naturalWidth, canvas has width)
+        let sheetWidth = this.spriteSheet.naturalWidth || this.spriteSheet.width;
+        let sheetHeigth = this.spriteSheet.naturalHeight || this.spriteSheet.height;
         let frameWidth = sheetWidth / this.totalColumns;
         let frameHeight = sheetHeigth / this.totalRows;
     

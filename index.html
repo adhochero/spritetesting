@@ -1,14 +1,28 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Multiplayer Canvas Demo</title>
+  <title>Canvas Demo</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <canvas id="gameCanvas"></canvas>
-  
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  
+
+  <div id="colorPicker">
+    <!-- defaults are #ffb494 in HSB -->
+    <label>
+      <span>HUE</span>
+      <input type="range" id="hueSlider" min="0" max="360" step="1" value="18">
+    </label>
+    <label>
+      <span>SAT</span>
+      <input type="range" id="satSlider" min="0" max="100" step="1" value="42">
+    </label>
+    <label>
+      <span>BRI</span>
+      <input type="range" id="briSlider" min="0" max="100" step="1" value="100">
+    </label>
+  </div>
+
   <script type="module" src="./app.js"></script>
 </body>
 </html>
