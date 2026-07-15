@@ -35,48 +35,46 @@ body{
 /* One source of truth for the picker's scale, so the track, thumb and label all
    grow together. The coarse-pointer bump below is the only thing that changes. */
 #colorPicker{
-    --track-height: 26px;
-    --thumb-width: 22px;
-    --thumb-height: 40px;
-    --slider-width: 210px;
+    --track-height: 12px;
+    --thumb-size: 18px; /* circle, so width and height are the same */
+    --slider-width: 140px;
 
     position: absolute;
-    top: 16px;
-    right: 16px;
+    top: 12px;
+    right: 12px;
     z-index: 10;
 
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    padding: 18px;
+    gap: 10px;
+    padding: 12px;
 
     background-color: rgba(0, 0, 0, 0.55);
-    border-radius: 10px;
+    border-radius: 8px;
 
     /* body sets touch-action: none for the joystick, re-enable it for the sliders */
     touch-action: auto;
 }
 
-/* Touch devices get a chunkier thumb to grab */
+/* Touch devices get a slightly larger thumb to grab */
 @media (pointer: coarse){
     #colorPicker{
-        --track-height: 32px;
-        --thumb-width: 30px;
-        --thumb-height: 48px;
-        --slider-width: 190px;
+        --track-height: 14px;
+        --thumb-size: 24px;
+        --slider-width: 150px;
 
-        gap: 20px;
+        gap: 12px;
     }
 }
 
 #colorPicker label{
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 10px;
 
     /* 3x3 is a wide face, so this reads bigger than the number suggests */
     font-family: '3x3', monospace;
-    font-size: 19px;
+    font-size: 13px;
     color: rgb(255, 53, 94);
 }
 
@@ -84,7 +82,7 @@ body{
    spilling over the slider */
 #colorPicker label span{
     flex: 0 0 auto;
-    min-width: 58px;
+    min-width: 40px;
 }
 
 /* appearance: none hands the track over to us, so the element's own background
@@ -112,15 +110,15 @@ body{
 }
 
 /* the thumb is taller than the track, so pull it up by half the difference
-   (the 2px border sits outside the declared height) */
+   (the 1px border sits outside the declared height) */
 #colorPicker input[type="range"]::-webkit-slider-thumb{
     -webkit-appearance: none;
-    width: var(--thumb-width);
-    height: var(--thumb-height);
-    margin-top: calc((var(--track-height) - var(--thumb-height)) / 2 - 3px);
+    width: var(--thumb-size);
+    height: var(--thumb-size);
+    margin-top: calc((var(--track-height) - var(--thumb-size)) / 2 - 2px);
 
-    border: 2px solid rgb(0, 0, 0);
-    border-radius: 999px;
+    border: 1px solid rgb(0, 0, 0);
+    border-radius: 50%;
     background: rgb(255, 255, 255);
 }
 
@@ -130,11 +128,11 @@ body{
 }
 
 #colorPicker input[type="range"]::-moz-range-thumb{
-    width: var(--thumb-width);
-    height: var(--thumb-height);
+    width: var(--thumb-size);
+    height: var(--thumb-size);
     box-sizing: border-box;
 
-    border: 2px solid rgb(0, 0, 0);
-    border-radius: 999px;
+    border: 1px solid rgb(0, 0, 0);
+    border-radius: 50%;
     background: rgb(255, 255, 255);
 }
