@@ -29,6 +29,10 @@ const spriteScale = 3;
 const playerIdleImage = loadImage('./assets/Base_Idle_8D.png');
 const playerRunImage = loadImage('./assets/Base_Walk_8D.png');
 
+// Jump sheet is 16x80 => 1 column x 5 rows of 16x16 frames — a single held frame per
+// direction, with the same row order as idle and walk.
+const playerJumpImage = loadImage('./assets/Base_Jump.png');
+
 // Death sheets are 64x32 => 4 columns x 2 rows of 16x16 frames, 8 frames played end to end.
 const deathImages = [
     loadImage('./assets/Base_Death_Kneel.png'),
@@ -40,11 +44,13 @@ const deathImages = [
 // keeps the sheet-swap identity checks in drawAnimatedSpritePlayer working.
 const playerIdleSheet = document.createElement('canvas');
 const playerRunSheet = document.createElement('canvas');
+const playerJumpSheet = document.createElement('canvas');
 const deathSheets = deathImages.map(() => document.createElement('canvas'));
 
 const tintTargets = [
     { source: playerIdleImage, target: playerIdleSheet },
     { source: playerRunImage, target: playerRunSheet },
+    { source: playerJumpImage, target: playerJumpSheet },
     ...deathImages.map((source, i) => ({ source, target: deathSheets[i] }))
 ];
 
@@ -60,10 +66,27 @@ const respawnFlashDuration = 1.2; // seconds
 const respawnFlashPulses = 3;
 const respawnFlashMinAlpha = 0.25;
 
+// Jump (visual-only vertical offset; the ground position is unchanged, so the
+// sprite is drawn at y + jumpOffsetY while everything else still uses y)
+const GRAVITY = 1800;           // px/s^2
+const JUMP_FIXED_VEL = -400;    // px/s upward — high arc, same on every jump
+const JUMP_FIXED_IMPULSE = 90;  // px/s forward launch in the flick direction
+const JUMP_COOLDOWN = 0.8;      // seconds between jumps
+const SHADOW_OPACITY = 0.35;
+const SHADOW_SCALE_X = 1.2;
+const SHADOW_SCALE_Y = 0.4;
+
 let isAlive = true;
 let deathAnimatedSprite = null;
 let respawnTimer = 0;
 let respawnFlashTimer = 0;
+
+let jumpAnimatedSprite;
+let isGrounded = true;
+let jumpVelocityY = 0;
+let jumpOffsetY = 0;
+let jumpCooldownTimer = 0;
+let jumpImpulse = { x: 0, y: 0 };
 
 let input = new Input(canvas);
 input.addEventListeners();
@@ -89,6 +112,11 @@ input.onQuickPress = (x, y) => {
     }
 };
 
+// Flicking the joystick jumps in the flicked direction
+input.onFlick = (directionX, directionY) => {
+    triggerJump(directionX, directionY);
+};
+
 window.addEventListener('resize', adjustCanvasSize);
 window.addEventListener('orientationchange', adjustCanvasSize);
 
@@ -104,6 +132,9 @@ window.addEventListener('load', async () => {
     });
 
     localAnimatedSprite = new AnimatedSprite(playerIdleSheet, 4, 5, 5, 4, spriteScale, 333, 333, .2, false, true, true);
+
+    // Left stopped: the single frame is held for the whole jump, only the row changes
+    jumpAnimatedSprite = new AnimatedSprite(playerJumpSheet, 1, 5, 5, 1, spriteScale, 333, 333, 1, false, false, false);
 
     // Start the animation loop
     window.requestAnimationFrame(update);
@@ -121,9 +152,11 @@ function update(timeStamp) {
     inputSmoothing.x = lerp(inputSmoothing.x, inputDirection.x, inputResponsiveness * deltaTime);
     inputSmoothing.y = lerp(inputSmoothing.y, inputDirection.y, inputResponsiveness * deltaTime);
 
-    // Movement from input
-    moveDirection.x = inputSmoothing.x * localUserSpeed;
-    moveDirection.y = inputSmoothing.y * localUserSpeed;
+    applyJumpPhysics(deltaTime);
+
+    // Movement from input, plus the forward launch while airborne
+    moveDirection.x = inputSmoothing.x * localUserSpeed + jumpImpulse.x;
+    moveDirection.y = inputSmoothing.y * localUserSpeed + jumpImpulse.y;
 
     // Handle local player movement
     if (moveDirection.x != 0) {
@@ -157,17 +190,28 @@ function update(timeStamp) {
         context.save();
         context.globalAlpha = getRespawnFlashAlpha(deltaTime);
 
-        drawAnimatedSpritePlayer(
-            localAnimatedSprite,
-            localUserPosition.x,
-            localUserPosition.y,
-            inputDirection.x,
-            inputDirection.y,
-            localPlayerState,
-            playerIdleSheet,
-            playerRunSheet,
-            deltaTime
-        );
+        if (isGrounded) {
+            drawAnimatedSpritePlayer(
+                localAnimatedSprite,
+                localUserPosition.x,
+                localUserPosition.y,
+                inputDirection.x,
+                inputDirection.y,
+                localPlayerState,
+                playerIdleSheet,
+                playerRunSheet,
+                deltaTime
+            );
+        } else {
+            drawShadow(localUserPosition.x, localUserPosition.y);
+            drawJumpingPlayer(
+                localUserPosition.x,
+                localUserPosition.y,
+                inputDirection.x,
+                inputDirection.y,
+                localPlayerState
+            );
+        }
 
         context.restore();
     } else {
@@ -280,10 +324,107 @@ function applyPlayerColor() {
     paintSliderTracks(h, s, b);
 }
 
+// Starts a jump if grounded, off cooldown and alive. The arc is fixed, so every
+// jump is the same height and forward launch regardless of how hard it was flicked.
+function triggerJump(directionX, directionY) {
+    if (!isAlive || !isGrounded || jumpCooldownTimer > 0) return false;
+
+    jumpVelocityY = JUMP_FIXED_VEL;
+    isGrounded = false;
+    jumpCooldownTimer = JUMP_COOLDOWN;
+    jumpImpulse.x = directionX * JUMP_FIXED_IMPULSE;
+    jumpImpulse.y = directionY * JUMP_FIXED_IMPULSE;
+
+    // Face the flick, so a jump from standing still still points the right way
+    if (directionX !== 0) localPlayerState.lastDirectionX = directionX;
+    const row = getDirectionRow(directionX, directionY);
+    if (row !== null) jumpAnimatedSprite.currentRow = row;
+
+    return true;
+}
+
+// Integrates the visual jump arc. jumpOffsetY is negative mid-air and returns to 0
+// on landing, which is what ends the jump.
+function applyJumpPhysics(deltaTime) {
+    if (jumpCooldownTimer > 0) jumpCooldownTimer = Math.max(0, jumpCooldownTimer - deltaTime);
+    if (isGrounded) return;
+
+    jumpVelocityY += GRAVITY * deltaTime;
+    jumpOffsetY += jumpVelocityY * deltaTime;
+
+    if (jumpOffsetY >= 0) {
+        jumpOffsetY = 0;
+        jumpVelocityY = 0;
+        isGrounded = true;
+        jumpImpulse.x = 0;
+        jumpImpulse.y = 0;
+    }
+}
+
+// Grounded marker so the height of the arc reads clearly. Drawn at the character's
+// feet on the ground position, never at the offset sprite position.
+function drawShadow(positionX, positionY) {
+    const radius = 16 * spriteScale * 0.5;
+
+    context.save();
+    context.globalAlpha = SHADOW_OPACITY;
+    context.fillStyle = 'black';
+    context.beginPath();
+    context.ellipse(
+        positionX,
+        positionY + radius * 0.75,
+        radius * SHADOW_SCALE_X * 0.5,
+        radius * SHADOW_SCALE_Y * 0.5,
+        0, 0, Math.PI * 2
+    );
+    context.fill();
+    context.restore();
+}
+
+// Airborne draw: one held frame for the whole jump. Steering mid-air still re-faces
+// the sprite; with no input it keeps the row set at takeoff.
+function drawJumpingPlayer(positionX, positionY, directionX, directionY, playerState) {
+    jumpAnimatedSprite.x = positionX;
+    jumpAnimatedSprite.y = positionY + jumpOffsetY;
+
+    if (directionX !== 0) playerState.lastDirectionX = directionX;
+    const row = getDirectionRow(directionX, directionY);
+    if (row !== null) jumpAnimatedSprite.currentRow = row;
+
+    context.save();
+    if (playerState.lastDirectionX < 0) {
+        context.translate(jumpAnimatedSprite.x * 2, 0);
+        context.scale(-1, 1);
+    }
+    jumpAnimatedSprite.drawSprite(context);
+    context.restore();
+}
+
 function getSquaredDistance(x1, y1, x2, y2) {
     const dx = x1 - x2;
     const dy = y1 - y2;
     return dx * dx + dy * dy;
+}
+
+// Sheet row for a heading. Idle, walk and jump all share this row order:
+// 1=North, 2=North-East, 3=East, 4=South-East, 5=South. West-facing angles reuse
+// the East-side rows and rely on the caller's horizontal flip.
+// Returns null when there's no meaningful direction, so the caller keeps its last row.
+function getDirectionRow(directionX, directionY) {
+    const epsilon = 0.01;
+    if (Math.abs(directionX) <= epsilon && Math.abs(directionY) <= epsilon) return null;
+
+    let degrees = Math.atan2(directionY, directionX) * (180 / Math.PI);
+    if (degrees < 0) degrees += 360;
+
+    if (degrees >= 337.5 || degrees < 22.5)        return 3; // East
+    else if (degrees >= 22.5 && degrees < 67.5)    return 4; // South-East
+    else if (degrees >= 67.5 && degrees < 112.5)   return 5; // South
+    else if (degrees >= 112.5 && degrees < 157.5)  return 4; // South-West (flipped South-East)
+    else if (degrees >= 157.5 && degrees < 202.5)  return 3; // West (flipped East)
+    else if (degrees >= 202.5 && degrees < 247.5)  return 2; // North-West (flipped North-East)
+    else if (degrees >= 247.5 && degrees < 292.5)  return 1; // North
+    return 2; // North-East
 }
 
 // Cosine wave so the pulse eases rather than strobes. It both starts and lands on
@@ -312,9 +453,15 @@ function killPlayer() {
     );
     deathAnimatedSprite.start();
 
-    // Kill any leftover momentum so the corpse doesn't drift
+    // Kill any leftover momentum so the corpse doesn't drift, and drop it out of
+    // any jump in progress so the death plays on the ground
     inputSmoothing.x = 0;
     inputSmoothing.y = 0;
+    isGrounded = true;
+    jumpOffsetY = 0;
+    jumpVelocityY = 0;
+    jumpImpulse.x = 0;
+    jumpImpulse.y = 0;
 }
 
 function respawnPlayer() {
@@ -385,25 +532,9 @@ function drawAnimatedSpritePlayer(
     }
 
     // change spritesheet row by angle of movement
-    // Rows: 1=North, 2=North-East, 3=East, 4=South-East, 5=South.
-    // West-facing angles reuse the East-side rows and rely on the horizontal flip above.
-    if (isMoving) {
-        let angle = Math.atan2(directionY, directionX);
-        let degrees = angle * (180 / Math.PI);
-        if (degrees < 0) degrees += 360;
+    const row = getDirectionRow(directionX, directionY);
+    if (row !== null) animatedSprite.currentRow = row;
 
-        let dir = 5;
-        if (degrees >= 337.5 || degrees < 22.5)        dir = 3; // East
-        else if (degrees >= 22.5 && degrees < 67.5)    dir = 4; // South-East
-        else if (degrees >= 67.5 && degrees < 112.5)   dir = 5; // South
-        else if (degrees >= 112.5 && degrees < 157.5)  dir = 4; // South-West (flipped South-East)
-        else if (degrees >= 157.5 && degrees < 202.5)  dir = 3; // West (flipped East)
-        else if (degrees >= 202.5 && degrees < 247.5)  dir = 2; // North-West (flipped North-East)
-        else if (degrees >= 247.5 && degrees < 292.5)  dir = 1; // North
-        else if (degrees >= 292.5 && degrees < 337.5)  dir = 2; // North-East
-
-        animatedSprite.currentRow = dir;
-    }
     animatedSprite.update(deltaTime);
     animatedSprite.drawSprite(context);
     context.restore(); // Restore canvas to unchanged state

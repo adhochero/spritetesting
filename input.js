@@ -1,3 +1,10 @@
+// Drops samples older than the trailing window so the buffer only holds
+// recent points for the flick's velocity calculation.
+function trimToWindow(buffer, nowMs, windowMs) {
+    const cutoff = nowMs - windowMs;
+    while (buffer.length > 1 && buffer[0].time < cutoff) buffer.shift();
+}
+
 export class Input {
     constructor(canvas) {
         this.canvas = canvas;
@@ -14,15 +21,22 @@ export class Input {
         this.pressRadius = 10;
         this.longPressDelay = 500;
         this.quickPressThreshold = 200;
+        // Flick: distance is the gate, measured over the trailing sample window,
+        // so only a fast late whip of the finger counts (a slow drag never does).
+        this.flickSampleWindowMs = 100;
+        this.flickMinDistance = 100;
+        this.flickMinSpeed = 0; // disabled — the distance gate is sufficient
         // Callbacks
         this.onLongPress = null;
         this.onQuickPress = null;
+        this.onFlick = null;
         // Timers
         this.longPressTimer = null;
         this.quickPressTimer = null;
         // Tracking
         this.downTime = 0;
-        
+        this.velocityBuffer = [];
+
         // Bind handlers
         this.handleDown = this.handleDown.bind(this);
         this.handleMove = this.handleMove.bind(this);
@@ -45,6 +59,7 @@ export class Input {
         this.isDown = true;
         this.isMoving = false;
         this.downTime = Date.now();
+        this.velocityBuffer = [{ x: pos.x, y: pos.y, time: this.downTime }];
 
         // Setup long press detection
         this.longPressTimer = setTimeout(() => {
@@ -59,8 +74,12 @@ export class Input {
         e.preventDefault();
 
         const pos = this.getCanvasCoords(e);
+        const now = Date.now();
         this.endX = pos.x;
         this.endY = pos.y;
+
+        this.velocityBuffer.push({ x: pos.x, y: pos.y, time: now });
+        trimToWindow(this.velocityBuffer, now, this.flickSampleWindowMs);
 
         // Check if movement exceeds threshold
         const dx = this.endX - this.startX;
@@ -84,10 +103,32 @@ export class Input {
         // Check for quick press
         if (!this.isMoving && pressDuration < this.quickPressThreshold) {
             this.quickPress(this.startX, this.startY);  // Pass coordinates
+        } else if (this.isMoving) {
+            this.detectFlick();
         }
-        
+
         this.isDown = false;
+        this.velocityBuffer = [];
         this.resetStartValues();
+    }
+
+    // Fires onFlick with the flick's unit direction and distance. Only the trailing
+    // window is measured, so where the finger ends up matters, not the whole drag.
+    detectFlick() {
+        const buffer = this.velocityBuffer;
+        if (buffer.length < 2) return;
+
+        const newest = buffer[buffer.length - 1];
+        const oldest = buffer[0];
+        const elapsed = (newest.time - oldest.time) / 1000;
+        const distX = newest.x - oldest.x;
+        const distY = newest.y - oldest.y;
+        const distance = Math.hypot(distX, distY);
+
+        if (elapsed <= 0 || distance < this.flickMinDistance) return;
+        if (distance / elapsed < this.flickMinSpeed) return;
+
+        if (this.onFlick) this.onFlick(distX / distance, distY / distance, distance);
     }
 
     quickPress(x, y) {
