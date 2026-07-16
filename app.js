@@ -39,6 +39,14 @@ const deathImages = [
     loadImage('./assets/Base_Death_Roll.png')
 ];
 
+// Solid black 16x16 ellipse, drawn translucent rather than tinted — it's the ground
+// marker, not part of the character, so the colour picker must not reach it.
+const shadowImage = loadImage('./assets/shadow.png');
+
+// The character fills its frame right down to the bottom edge, so shifting it up by
+// half a frame puts its feet on the ground position — where the shadow is centred.
+const spriteFootOffset = 16 * spriteScale * 0.5;
+
 // Every sheet the player is drawn from gets a tinted offscreen copy. The sprites are
 // drawn from these canvases, so re-tinting in place recolors the player instantly and
 // keeps the sheet-swap identity checks in drawAnimatedSpritePlayer working.
@@ -72,9 +80,7 @@ const GRAVITY = 1800;           // px/s^2
 const JUMP_FIXED_VEL = -400;    // px/s upward — high arc, same on every jump
 const JUMP_FIXED_IMPULSE = 90;  // px/s forward launch in the flick direction
 const JUMP_COOLDOWN = 0.8;      // seconds between jumps
-const SHADOW_OPACITY = 0.35;
-const SHADOW_SCALE_X = 1.2;
-const SHADOW_SCALE_Y = 0.4;
+const SHADOW_OPACITY = 0.35;    // shadow.png is solid black, so this is what softens it
 
 let isAlive = true;
 let deathAnimatedSprite = null;
@@ -107,7 +113,11 @@ input.onQuickPress = (x, y) => {
     const worldX = x - camera.x;
     const worldY = y - camera.y;
 
-    if (getSquaredDistance(localUserPosition.x, localUserPosition.y, worldX, worldY) <= playerHitRadius * playerHitRadius) {
+    // Test against where the sprite is actually drawn — its body sits above the
+    // ground position, and rides the arc while airborne
+    const spriteCenterY = localUserPosition.y - spriteFootOffset + jumpOffsetY;
+
+    if (getSquaredDistance(localUserPosition.x, spriteCenterY, worldX, worldY) <= playerHitRadius * playerHitRadius) {
         killPlayer();
     }
 };
@@ -185,6 +195,10 @@ function update(timeStamp) {
 
     // --- DRAW IN WORLD ---
 
+    // Shadow stays on the ground under the player at all times, and outside the
+    // respawn flash so it holds steady while the character pulses
+    drawShadow(localUserPosition.x, localUserPosition.y);
+
     if (isAlive) {
         // Draw local player, pulsing if it just respawned
         context.save();
@@ -203,7 +217,6 @@ function update(timeStamp) {
                 deltaTime
             );
         } else {
-            drawShadow(localUserPosition.x, localUserPosition.y);
             drawJumpingPlayer(
                 localUserPosition.x,
                 localUserPosition.y,
@@ -216,7 +229,7 @@ function update(timeStamp) {
         context.restore();
     } else {
         deathAnimatedSprite.x = localUserPosition.x;
-        deathAnimatedSprite.y = localUserPosition.y;
+        deathAnimatedSprite.y = localUserPosition.y - spriteFootOffset;
         deathAnimatedSprite.update(deltaTime);
         deathAnimatedSprite.drawSprite(context);
 
@@ -361,23 +374,17 @@ function applyJumpPhysics(deltaTime) {
     }
 }
 
-// Grounded marker so the height of the arc reads clearly. Drawn at the character's
-// feet on the ground position, never at the offset sprite position.
+// Always drawn on the ground position, never at the offset sprite position — so the
+// gap between it and the feet is what reads as jump height.
 function drawShadow(positionX, positionY) {
-    const radius = 16 * spriteScale * 0.5;
+    if (!shadowImage.naturalWidth) return; // not decoded yet
+
+    const size = 16 * spriteScale;
 
     context.save();
     context.globalAlpha = SHADOW_OPACITY;
-    context.fillStyle = 'black';
-    context.beginPath();
-    context.ellipse(
-        positionX,
-        positionY + radius * 0.75,
-        radius * SHADOW_SCALE_X * 0.5,
-        radius * SHADOW_SCALE_Y * 0.5,
-        0, 0, Math.PI * 2
-    );
-    context.fill();
+    context.imageSmoothingEnabled = false;
+    context.drawImage(shadowImage, positionX - size * 0.5, positionY - size * 0.5, size, size);
     context.restore();
 }
 
@@ -385,7 +392,7 @@ function drawShadow(positionX, positionY) {
 // the sprite; with no input it keeps the row set at takeoff.
 function drawJumpingPlayer(positionX, positionY, directionX, directionY, playerState) {
     jumpAnimatedSprite.x = positionX;
-    jumpAnimatedSprite.y = positionY + jumpOffsetY;
+    jumpAnimatedSprite.y = positionY - spriteFootOffset + jumpOffsetY;
 
     if (directionX !== 0) playerState.lastDirectionX = directionX;
     const row = getDirectionRow(directionX, directionY);
@@ -512,7 +519,7 @@ function drawAnimatedSpritePlayer(
 ){
     context.save(); // Save current state
     animatedSprite.x = positionX;
-    animatedSprite.y = positionY;
+    animatedSprite.y = positionY - spriteFootOffset;
     if(directionX !== 0) playerState.lastDirectionX = directionX;
 
     // horizontal flip for reverse direction
