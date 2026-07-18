@@ -82,6 +82,12 @@ const JUMP_FIXED_IMPULSE = 90;  // px/s forward launch in the flick direction
 const JUMP_COOLDOWN = 0.8;      // seconds between jumps
 const SHADOW_OPACITY = 0.35;    // shadow.png is solid black, so this is what softens it
 
+// Peak visual height of a jump (v^2 / 2g) — used to scale the shadow by how far off
+// the ground the character is.
+const JUMP_APEX_HEIGHT = (JUMP_FIXED_VEL * JUMP_FIXED_VEL) / (2 * GRAVITY);
+const SHADOW_MIN_JUMP_SCALE = 0.5;  // shadow's stretch span at the apex, vs grounded
+const SHADOW_DEATH_SCALE_X = 1.8;   // widen to sit under the lying-down body
+
 let isAlive = true;
 let deathAnimatedSprite = null;
 let respawnTimer = 0;
@@ -375,16 +381,60 @@ function applyJumpPhysics(deltaTime) {
 }
 
 // Always drawn on the ground position, never at the offset sprite position — so the
-// gap between it and the feet is what reads as jump height.
+// gap between it and the feet is what reads as jump height. Shrinks as the character
+// jumps away from the ground, and widens under the lying-down body on death.
 function drawShadow(positionX, positionY) {
+    let scaleX, scaleY;
+    if (!isAlive) {
+        scaleX = SHADOW_DEATH_SCALE_X;
+        scaleY = 1;
+    } else {
+        const jumpProgress = Math.min(1, Math.abs(jumpOffsetY) / JUMP_APEX_HEIGHT);
+        scaleX = scaleY = lerp(1, SHADOW_MIN_JUMP_SCALE, jumpProgress);
+    }
+    drawShadowNineSlice(positionX, positionY, scaleX, scaleY);
+}
+
+// 9-slice blit of shadow.png: the 1px corners always render at native pixel scale, the
+// top/bottom edges stretch horizontally only, the left/right edges vertically only, and
+// the centre in both. scaleX/scaleY scale just the stretchable spans, so scaling the
+// shadow never distorts the pixel-art border. Slice edges are rounded to whole device
+// pixels so the nine pieces abut with no seams or gaps.
+function drawShadowNineSlice(centerX, centerY, scaleX, scaleY) {
     if (!shadowImage.naturalWidth) return; // not decoded yet
 
-    const size = 16 * spriteScale;
+    const sw = shadowImage.naturalWidth;   // 10
+    const sh = shadowImage.naturalHeight;  // 4
+    const corner = 1;                      // source corner size in px
+
+    const dCorner = corner * spriteScale;
+    const dMidW = (sw - 2 * corner) * spriteScale * scaleX;
+    const dMidH = (sh - 2 * corner) * spriteScale * scaleY;
+
+    const x0 = centerX - (dCorner * 2 + dMidW) / 2;
+    const y0 = centerY - (dCorner * 2 + dMidH) / 2;
+
+    // Source and destination slice boundaries (3 columns x 3 rows).
+    const sx = [0, corner, sw - corner, sw];
+    const sy = [0, corner, sh - corner, sh];
+    const dx = [x0, x0 + dCorner, x0 + dCorner + dMidW, x0 + 2 * dCorner + dMidW].map(Math.round);
+    const dy = [y0, y0 + dCorner, y0 + dCorner + dMidH, y0 + 2 * dCorner + dMidH].map(Math.round);
 
     context.save();
     context.globalAlpha = SHADOW_OPACITY;
     context.imageSmoothingEnabled = false;
-    context.drawImage(shadowImage, positionX - size * 0.5, positionY - size * 0.5, size, size);
+    for (let col = 0; col < 3; col++) {
+        for (let row = 0; row < 3; row++) {
+            const dw = dx[col + 1] - dx[col];
+            const dh = dy[row + 1] - dy[row];
+            if (dw <= 0 || dh <= 0) continue;
+            context.drawImage(
+                shadowImage,
+                sx[col], sy[row], sx[col + 1] - sx[col], sy[row + 1] - sy[row],
+                dx[col], dy[row], dw, dh
+            );
+        }
+    }
     context.restore();
 }
 
