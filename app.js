@@ -87,6 +87,7 @@ const SHADOW_OPACITY = 0.35;    // shadow.png is solid black, so this is what so
 const JUMP_APEX_HEIGHT = (JUMP_FIXED_VEL * JUMP_FIXED_VEL) / (2 * GRAVITY);
 const SHADOW_MIN_JUMP_SCALE = 0.5;  // shadow's stretch span at the apex, vs grounded
 const SHADOW_DEATH_SCALE_X = 1.8;   // widen to sit under the lying-down body
+const SHADOW_DEATH_DELAY_FRAMES = 2; // death frames spent still standing before the widen
 
 let isAlive = true;
 let deathAnimatedSprite = null;
@@ -386,7 +387,12 @@ function applyJumpPhysics(deltaTime) {
 function drawShadow(positionX, positionY) {
     let scaleX, scaleY;
     if (!isAlive) {
-        scaleX = SHADOW_DEATH_SCALE_X;
+        // The death sprite stands for its first couple frames before dropping, so hold
+        // the normal width until it goes horizontal, then widen.
+        const deathFrame = deathAnimatedSprite
+            ? (deathAnimatedSprite.currentRow - 1) * deathAnimatedSprite.totalColumns + deathAnimatedSprite.currentFrame
+            : 0;
+        scaleX = deathFrame < SHADOW_DEATH_DELAY_FRAMES ? 1 : SHADOW_DEATH_SCALE_X;
         scaleY = 1;
     } else {
         const jumpProgress = Math.min(1, Math.abs(jumpOffsetY) / JUMP_APEX_HEIGHT);
