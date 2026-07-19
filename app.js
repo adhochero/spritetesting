@@ -96,9 +96,9 @@ const SHADOW_DEATH_DELAY_FRAMES = 2; // death frames spent still standing before
 // Footprints. Sized in art pixels so they stay on the same grid as the sprites.
 const FOOTPRINT_SIZE = 3 * spriteScale;
 const FOOTPRINT_SPREAD = 5;    // world units either side of the walking line
-const FOOTPRINT_STRIDE = 20;   // world units travelled between prints
+const FOOTPRINT_STRIDE = 25;   // world units travelled between prints
 const FOOTPRINT_LIFE = 2.5;    // seconds to fade out
-const FOOTPRINT_OPACITY = 0.20;
+const FOOTPRINT_OPACITY = 0.10;
 const FOOTPRINT_MAX = 80;      // oldest are dropped past this, so the array stays bounded
 
 let footprints = [];
