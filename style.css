@@ -75,16 +75,15 @@ body{
    rotation from that edge, so the two can't drift apart. */
 #hexInput{
     position: absolute;
-    height: 14px;
-    /* width is set from the edge length in JS; centred so the text lands on the
-       edge's midpoint */
+    /* width/height/line-height come from JS, sized in the pre-scale space */
     text-align: center;
 
-    /* 3x3 is a wide face, so this reads bigger than the number suggests */
+    /* 16px stops iOS zooming the page on focus; JS scales the field back down to
+       HEX_VISUAL_PX, so this is a layout size, not the drawn one. Sizes below are in
+       that same pre-scale space. */
     font-family: '3x3', monospace;
-    font-size: 12px;
-    line-height: 14px;
-    letter-spacing: 1px;
+    font-size: 16px;
+    letter-spacing: 1.33px;
     text-transform: uppercase;
     color: rgb(255, 53, 94);
 
@@ -93,10 +92,11 @@ body{
     border: none;
     outline: none;
 
-    /* body turns off selection and touch for the game — the hex field needs both */
+    /* body turns off selection and touch for the game — the hex field needs both.
+       manipulation keeps tap-to-focus but drops the double-tap-to-zoom gesture. */
     -webkit-user-select: text;
     user-select: text;
-    touch-action: auto;
+    touch-action: manipulation;
     cursor: text;
 
     /* hidden while closed so it can't peek out beside the tip */

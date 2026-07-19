@@ -89,6 +89,11 @@ const TRI_W = Math.ceil(TRI_SPAN + 2 * INSET);
 
 // Hex sits just outside the lower edge, rotated to run parallel with it.
 const HEX_EDGE_GAP = 6;                 // perpendicular clearance from the edge
+const HEX_BOX_H = 14;                   // drawn height of the hex field
+// iOS only leaves a focused input alone at 16px+, so lay it out at 16 and scale down.
+const HEX_FONT_PX = 16;
+const HEX_VISUAL_PX = 12;
+const HEX_SCALE = HEX_VISUAL_PX / HEX_FONT_PX;
 
 // Triangle corners. Left apex is the fully saturated hue, top-right is white and
 // bottom-right is black — so any interior point is a hue/white/black mix, which is
@@ -172,14 +177,23 @@ export function createColorPicker({ hue = 0, saturation = 100, brightness = 100,
     // Lay the hex along the apex→black edge, offset clear of it on the outside. The
     // field spans the whole edge and centres its own text, so the hex lands on the
     // edge's midpoint whatever its rendered width.
+    //
+    // iOS zooms the page whenever a focused input's font is under 16px, so the field
+    // is laid out at 16px in a correspondingly oversized box and scaled back down —
+    // it measures 16px to Safari but still draws at HEX_VISUAL_PX. Scaling from the
+    // 0 0 origin keeps the anchor put, so the rotation maths above is unaffected.
     const edgeAngle = Math.atan2(BLACK.y - APEX.y, BLACK.x - APEX.x);
     const normalX = -Math.sin(edgeAngle);
     const normalY = Math.cos(edgeAngle);
-    hexInput.style.width = Math.hypot(BLACK.x - APEX.x, BLACK.y - APEX.y) + 'px';
+    const edgeLength = Math.hypot(BLACK.x - APEX.x, BLACK.y - APEX.y);
+
+    hexInput.style.width = (edgeLength / HEX_SCALE) + 'px';
+    hexInput.style.height = (HEX_BOX_H / HEX_SCALE) + 'px';
+    hexInput.style.lineHeight = (HEX_BOX_H / HEX_SCALE) + 'px';
     hexInput.style.left = (APEX.x + normalX * HEX_EDGE_GAP) + 'px';
     hexInput.style.top = (APEX.y + normalY * HEX_EDGE_GAP) + 'px';
     hexInput.style.transformOrigin = '0 0';
-    hexInput.style.transform = `rotate(${edgeAngle}rad)`;
+    hexInput.style.transform = `rotate(${edgeAngle}rad) scale(${HEX_SCALE})`;
 
     // Cursor position for the current saturation/brightness. Inverting the weights
     // derived below: a = s*v, w = (1-s)*v, k = 1-v.
