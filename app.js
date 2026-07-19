@@ -98,7 +98,9 @@ const FOOTPRINT_WIDTH = 3 * spriteScale;
 const FOOTPRINT_HEIGHT = 2 * spriteScale;
 const FOOTPRINT_SPREAD = 5;    // world units either side of the walking line
 const FOOTPRINT_STRIDE = 25;   // world units travelled between prints
-const FOOTPRINT_LIFE = 2.5;    // seconds to fade out
+const FOOTPRINT_HOLD = 2.5;    // seconds held at full opacity before fading at all
+const FOOTPRINT_FADE = 0.5;    // seconds to fade out once it starts
+const FOOTPRINT_LIFE = FOOTPRINT_HOLD + FOOTPRINT_FADE; // derived, so culling stays in sync
 const FOOTPRINT_OPACITY = 0.10;
 const FOOTPRINT_MAX = 80;      // oldest are dropped past this, so the array stays bounded
 
@@ -417,7 +419,10 @@ function drawFootprints() {
     context.save();
     context.fillStyle = '#000';
     footprints.forEach(print => {
-        context.globalAlpha = FOOTPRINT_OPACITY * (1 - print.age / FOOTPRINT_LIFE);
+        // Full strength for the hold, then a quick ramp off — rather than fading
+        // from the moment it lands, which leaves the whole trail half-visible.
+        const fading = Math.max(0, print.age - FOOTPRINT_HOLD) / FOOTPRINT_FADE;
+        context.globalAlpha = FOOTPRINT_OPACITY * (1 - Math.min(1, fading));
         context.fillRect(print.x, print.y, FOOTPRINT_WIDTH, FOOTPRINT_HEIGHT);
     });
     context.restore();
