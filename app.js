@@ -93,6 +93,19 @@ const SHADOW_MIN_JUMP_SCALE = 0.5;  // shadow's stretch span at the apex, vs gro
 const SHADOW_DEATH_SCALE_X = 1.8;   // widen to sit under the lying-down body
 const SHADOW_DEATH_DELAY_FRAMES = 2; // death frames spent still standing before the widen
 
+// Footprints. Sized in art pixels so they stay on the same grid as the sprites —
+// 2 art pixels is 6 world units at this scale.
+const FOOTPRINT_SIZE = 2 * spriteScale;
+const FOOTPRINT_SPREAD = 5;    // world units either side of the walking line
+const FOOTPRINT_STRIDE = 26;   // world units travelled between prints
+const FOOTPRINT_LIFE = 2.5;    // seconds to fade out
+const FOOTPRINT_OPACITY = 0.28;
+const FOOTPRINT_MAX = 80;      // oldest are dropped past this, so the array stays bounded
+
+let footprints = [];
+let strideAccumulator = 0;
+let footSide = 1;              // flips each print, so they alternate left/right
+
 let isAlive = true;
 let deathAnimatedSprite = null;
 let respawnTimer = 0;
@@ -195,6 +208,8 @@ function update(timeStamp) {
         localUserPosition.y += moveDirection.y * deltaTime;
     }
 
+    updateFootprints(deltaTime);
+
     // Update camera to follow local player
     camera.x = lerp(camera.x, -localUserPosition.x + canvas.width / 2, cameraFollowSpeed * deltaTime);
     camera.y = lerp(camera.y, -localUserPosition.y + canvas.height / 2, cameraFollowSpeed * deltaTime);
@@ -213,6 +228,7 @@ function update(timeStamp) {
     // --- DRAW IN WORLD ---
 
     drawTerrain();
+    drawFootprints();
 
     // Shadow stays on the ground under the player at all times, and outside the
     // respawn flash so it holds steady while the character pulses
@@ -351,6 +367,60 @@ function applyJumpPhysics(deltaTime) {
         jumpImpulse.x = 0;
         jumpImpulse.y = 0;
     }
+}
+
+// Prints are laid down by distance travelled rather than on a timer, so they keep an
+// even spacing no matter how fast the player is moving. Airborne and dead both stop
+// them — feet have to be on the ground to leave a mark.
+function updateFootprints(deltaTime) {
+    footprints.forEach(print => { print.age += deltaTime; });
+    if (footprints.length && footprints[0].age >= FOOTPRINT_LIFE) {
+        footprints = footprints.filter(print => print.age < FOOTPRINT_LIFE);
+    }
+
+    if (!isAlive || !isGrounded) return;
+
+    const speed = Math.hypot(moveDirection.x, moveDirection.y);
+    if (speed <= 1) {
+        // Standing still — prime the accumulator so the first step lands immediately
+        // rather than half a stride after setting off.
+        strideAccumulator = FOOTPRINT_STRIDE;
+        return;
+    }
+
+    strideAccumulator += speed * deltaTime;
+    if (strideAccumulator < FOOTPRINT_STRIDE) return;
+    strideAccumulator -= FOOTPRINT_STRIDE;
+
+    // Offset perpendicular to travel and alternate sides, so the prints straddle the
+    // walking line as a left/right pair instead of a single centred track.
+    const dirX = moveDirection.x / speed;
+    const dirY = moveDirection.y / speed;
+    const offsetX = -dirY * FOOTPRINT_SPREAD * footSide;
+    const offsetY = dirX * FOOTPRINT_SPREAD * footSide;
+    footSide = -footSide;
+
+    // Snapping to the art-pixel grid keeps them crisp against the tiles.
+    const snap = value => Math.round(value / spriteScale) * spriteScale;
+    footprints.push({
+        x: snap(localUserPosition.x + offsetX - FOOTPRINT_SIZE / 2),
+        y: snap(localUserPosition.y + offsetY - FOOTPRINT_SIZE / 2),
+        age: 0
+    });
+
+    if (footprints.length > FOOTPRINT_MAX) footprints.shift();
+}
+
+function drawFootprints() {
+    if (!footprints.length) return;
+
+    context.save();
+    context.fillStyle = '#000';
+    footprints.forEach(print => {
+        context.globalAlpha = FOOTPRINT_OPACITY * (1 - print.age / FOOTPRINT_LIFE);
+        context.fillRect(print.x, print.y, FOOTPRINT_SIZE, FOOTPRINT_SIZE);
+    });
+    context.restore();
 }
 
 // Always drawn on the ground position, never at the offset sprite position — so the
