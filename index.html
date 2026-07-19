@@ -8,20 +8,23 @@
 <body>
   <canvas id="gameCanvas"></canvas>
 
+  <!-- Drawer: the tab stays on screen, the panel sits off-screen until opened. -->
   <div id="colorPicker">
-    <!-- defaults are #ffb494 in HSB -->
-    <label>
-      <span>HUE</span>
-      <input type="range" id="hueSlider" min="0" max="360" step="1" value="18">
-    </label>
-    <label>
-      <span>SAT</span>
-      <input type="range" id="satSlider" min="0" max="100" step="1" value="42">
-    </label>
-    <label>
-      <span>BRI</span>
-      <input type="range" id="briSlider" min="0" max="100" step="1" value="100">
-    </label>
+    <button id="colorTab" type="button" aria-expanded="false" aria-controls="colorPanel" aria-label="Toggle colour picker">
+      <span id="colorTabSwatch"></span>
+    </button>
+
+    <div id="colorPanel" role="group" aria-label="Colour picker">
+      <div id="pickerControls">
+        <canvas id="triangleCanvas" aria-label="Saturation and brightness"></canvas>
+        <canvas id="hueCanvas" aria-label="Hue"></canvas>
+      </div>
+
+      <label id="pickerReadout">
+        <span id="hexSwatch"></span>
+        <input id="hexInput" type="text" spellcheck="false" autocomplete="off" maxlength="7" aria-label="Hex colour">
+      </label>
+    </div>
   </div>
 
   <script type="module" src="./app.js"></script>

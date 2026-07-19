@@ -1,5 +1,6 @@
 import { Input } from './input.js';
 import { AnimatedSprite } from './animatedSprite.js';
+import { createColorPicker, hsbToRgbString } from './colorPicker.js';
 
 const canvas = document.getElementById('gameCanvas');
 const context = canvas.getContext('2d');
@@ -62,9 +63,8 @@ const tintTargets = [
     ...deathImages.map((source, i) => ({ source, target: deathSheets[i] }))
 ];
 
-const hueSlider = document.getElementById('hueSlider');
-const satSlider = document.getElementById('satSlider');
-const briSlider = document.getElementById('briSlider');
+// Starting player colour, #ffb494 in HSB
+const DEFAULT_COLOR = { hue: 18, saturation: 42, brightness: 100 };
 
 const playerHitRadius = 24; // frame is 16px drawn at spriteScale => 48px, so half of that
 const respawnDelay = 3; // seconds to hold the last death frame before respawning
@@ -142,11 +142,9 @@ window.addEventListener('load', async () => {
 
     // The sheets have to be decoded before they can be tinted into the offscreen canvases
     await Promise.all(tintTargets.map(({ source }) => source.decode().catch(() => {})));
-    applyPlayerColor();
 
-    [hueSlider, satSlider, briSlider].forEach(slider => {
-        slider.addEventListener('input', applyPlayerColor);
-    });
+    // Fires once on creation, which lays down the initial tint
+    createColorPicker({ ...DEFAULT_COLOR, onChange: applyPlayerColor });
 
     localAnimatedSprite = new AnimatedSprite(playerIdleSheet, 4, 5, 5, 4, spriteScale, 333, 333, .2, false, true, true);
 
@@ -270,28 +268,6 @@ function lerp(start, end, t) {
     return start + (end - start) * t;
 }
 
-// Hue 0-360, saturation/brightness 0-100. The slider defaults (18, 42, 100) are
-// #ffb494; hue 0 / sat 0 / brightness 100 is white, which multiplies to a no-op.
-function hsbToRgbString(h, s, b) {
-    s /= 100;
-    b /= 100;
-
-    const chroma = b * s;
-    const second = chroma * (1 - Math.abs(((h / 60) % 2) - 1));
-    const match = b - chroma;
-
-    let rgb;
-    if (h < 60)       rgb = [chroma, second, 0];
-    else if (h < 120) rgb = [second, chroma, 0];
-    else if (h < 180) rgb = [0, chroma, second];
-    else if (h < 240) rgb = [0, second, chroma];
-    else if (h < 300) rgb = [second, 0, chroma];
-    else              rgb = [chroma, 0, second];
-
-    const [r, g, bl] = rgb.map(v => Math.round((v + match) * 255));
-    return `rgb(${r}, ${g}, ${bl})`;
-}
-
 // Paints `color` over the opaque pixels of `source` into the `target` offscreen canvas.
 // multiply keeps the sprite's black outlines and shading instead of flattening it to a
 // solid silhouette; destination-in then re-applies the sheet's alpha so the fill is
@@ -321,27 +297,9 @@ function tintSheet(source, target, color) {
     tintContext.globalCompositeOperation = 'source-over';
 }
 
-// Each track previews what its own slider does: the full hue wheel, and saturation /
-// brightness ramps built from the other two values as they currently stand.
-function paintSliderTracks(h, s, b) {
-    const hueStops = [];
-    for (let stop = 0; stop <= 360; stop += 30) {
-        hueStops.push(`${hsbToRgbString(stop, 100, 100)} ${(stop / 360 * 100).toFixed(2)}%`);
-    }
-
-    hueSlider.style.background = `linear-gradient(to right, ${hueStops.join(', ')})`;
-    satSlider.style.background = `linear-gradient(to right, ${hsbToRgbString(h, 0, b)}, ${hsbToRgbString(h, 100, b)})`;
-    briSlider.style.background = `linear-gradient(to right, ${hsbToRgbString(h, s, 0)}, ${hsbToRgbString(h, s, 100)})`;
-}
-
-function applyPlayerColor() {
-    const h = Number(hueSlider.value);
-    const s = Number(satSlider.value);
-    const b = Number(briSlider.value);
-
+function applyPlayerColor(h, s, b) {
     const color = hsbToRgbString(h, s, b);
     tintTargets.forEach(({ source, target }) => tintSheet(source, target, color));
-    paintSliderTracks(h, s, b);
 }
 
 // Starts a jump if grounded, off cooldown and alive. The arc is fixed, so every
