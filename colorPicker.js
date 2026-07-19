@@ -72,12 +72,20 @@ export function hexToHsb(hex) {
 // ── Layout ───────────────────────────────────────────────────────────────────
 
 const BORDER = 6;                       // chunky retro outline
-const TRI_W = 150, TRI_H = 150;
+const INSET = BORDER / 2;               // puts the stroke's outer edge on the canvas edge
 const HUE_W = 34, HUE_H = 150;
 const CURSOR_R = 9;
 const CORNER_R = 8;                     // triangle corner rounding
-const HUE_OVERLAP = 3;                  // pulls the hue bar's outline against the triangle's
+const HUE_OVERLAP = 1;                  // pulls the hue bar's outline against the triangle's
 const TIP_PEEK = 44;                    // width of tip left on screen when closed
+
+// Equilateral, with its vertical edge spanning the hue bar's full height — both are
+// inset by half the stroke, so the triangle's top and bottom corners land exactly on
+// the bar's ends. The apex distance follows from the side length.
+const TRI_H = HUE_H;
+const TRI_SIDE = TRI_H - 2 * INSET;
+const TRI_SPAN = TRI_SIDE * Math.sqrt(3) / 2;
+const TRI_W = Math.ceil(TRI_SPAN + 2 * INSET);
 
 // Hex sits just outside the lower edge, rotated to run parallel with it.
 const HEX_EDGE_GAP = 6;                 // perpendicular clearance from the edge
@@ -85,9 +93,9 @@ const HEX_EDGE_GAP = 6;                 // perpendicular clearance from the edge
 // Triangle corners. Left apex is the fully saturated hue, top-right is white and
 // bottom-right is black — so any interior point is a hue/white/black mix, which is
 // exactly the HSV gamut for this hue.
-const APEX  = { x: BORDER,         y: TRI_H / 2 };
-const WHITE = { x: TRI_W - BORDER, y: BORDER };
-const BLACK = { x: TRI_W - BORDER, y: TRI_H - BORDER };
+const WHITE = { x: TRI_W - INSET, y: INSET };
+const BLACK = { x: TRI_W - INSET, y: TRI_H - INSET };
+const APEX  = { x: WHITE.x - TRI_SPAN, y: TRI_H / 2 };
 
 // Barycentric weights are affine in x and y, so the per-pixel work reduces to two
 // multiply-adds once these coefficients are folded in.
@@ -293,7 +301,7 @@ export function createColorPicker({ hue = 0, saturation = 100, brightness = 100,
             gradient.addColorStop(stop / 6, hsbToRgbString(stop * 60, 100, 100));
         }
 
-        roundRectPath(hueCtx, BORDER / 2, BORDER / 2, HUE_W - BORDER, HUE_H - BORDER, 6);
+        roundRectPath(hueCtx, INSET, INSET, HUE_W - BORDER, HUE_H - BORDER, 6);
         hueCtx.fillStyle = gradient;
         hueCtx.fill();
         hueCtx.lineWidth = BORDER;

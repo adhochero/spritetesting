@@ -93,11 +93,6 @@ body{
     border: none;
     outline: none;
 
-    /* nothing behind it any more, so it carries its own contrast */
-    text-shadow:
-         1px  1px 0 #000, -1px  1px 0 #000,
-         1px -1px 0 #000, -1px -1px 0 #000;
-
     /* body turns off selection and touch for the game — the hex field needs both */
     -webkit-user-select: text;
     user-select: text;
