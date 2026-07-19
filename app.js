@@ -94,7 +94,8 @@ const SHADOW_DEATH_SCALE_X = 1.8;   // widen to sit under the lying-down body
 const SHADOW_DEATH_DELAY_FRAMES = 2; // death frames spent still standing before the widen
 
 // Footprints. Sized in art pixels so they stay on the same grid as the sprites.
-const FOOTPRINT_SIZE = 3 * spriteScale;
+const FOOTPRINT_WIDTH = 3 * spriteScale;
+const FOOTPRINT_HEIGHT = 2 * spriteScale;
 const FOOTPRINT_SPREAD = 5;    // world units either side of the walking line
 const FOOTPRINT_STRIDE = 25;   // world units travelled between prints
 const FOOTPRINT_LIFE = 2.5;    // seconds to fade out
@@ -402,8 +403,8 @@ function updateFootprints(deltaTime) {
     // Snapping to the art-pixel grid keeps them crisp against the tiles.
     const snap = value => Math.round(value / spriteScale) * spriteScale;
     footprints.push({
-        x: snap(localUserPosition.x + offsetX - FOOTPRINT_SIZE / 2),
-        y: snap(localUserPosition.y + offsetY - FOOTPRINT_SIZE / 2),
+        x: snap(localUserPosition.x + offsetX - FOOTPRINT_WIDTH / 2),
+        y: snap(localUserPosition.y + offsetY - FOOTPRINT_HEIGHT / 2),
         age: 0
     });
 
@@ -417,7 +418,7 @@ function drawFootprints() {
     context.fillStyle = '#000';
     footprints.forEach(print => {
         context.globalAlpha = FOOTPRINT_OPACITY * (1 - print.age / FOOTPRINT_LIFE);
-        context.fillRect(print.x, print.y, FOOTPRINT_SIZE, FOOTPRINT_SIZE);
+        context.fillRect(print.x, print.y, FOOTPRINT_WIDTH, FOOTPRINT_HEIGHT);
     });
     context.restore();
 }
