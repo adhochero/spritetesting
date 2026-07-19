@@ -34,12 +34,12 @@ const CA_PASSES = 4;
 const FILL_CENTRE = 0.86;     // grass chance at the middle of the map
 const EDGE_FALLOFF = 0.55;    // how hard that chance falls off toward the edges
 const CLEARING_RADIUS = 3.4;  // grass disc guaranteed around spawn
-const TRAIL_COUNT = 2;
+const TRAIL_COUNT = 3;
 const TRAIL_RADIUS = 0.9;     // one cell wide — any wider and trails eat the coast
 const TRAIL_LENGTH = 20;      // cells travelled from the clearing out to the shore
 const TRAIL_STEP = 0.5;       // sub-cell stepping; whole steps skip past cells
 const TRAIL_WANDER = 1.4;     // amplitude of the meander, in radians
-const TRAIL_FREQ = 0.55;      // meander cycles per cell travelled
+const TRAIL_FREQ = 0.50;      // meander cycles per cell travelled
 
 // mulberry32 — a small deterministic PRNG, so one seed always yields one island.
 function makeRandom(seed) {
