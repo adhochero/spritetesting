@@ -134,6 +134,23 @@ input.onFlick = (directionX, directionY) => {
     triggerJump(directionX, directionY);
 };
 
+// The viewport meta pins the page scale, which covers desktop and the zoom iOS does
+// when you focus a text field. iOS deliberately ignores it for pinch gestures though,
+// so those get blocked here — between the two, nothing zooms the page.
+function disableBrowserZoom() {
+    // Safari's pinch gesture events (iOS and macOS trackpads)
+    ['gesturestart', 'gesturechange', 'gestureend'].forEach(type => {
+        document.addEventListener(type, event => event.preventDefault(), { passive: false });
+    });
+
+    // Ctrl/Cmd + wheel is pinch-zoom on desktop
+    window.addEventListener('wheel', event => {
+        if (event.ctrlKey || event.metaKey) event.preventDefault();
+    }, { passive: false });
+}
+
+disableBrowserZoom();
+
 window.addEventListener('resize', adjustCanvasSize);
 window.addEventListener('orientationchange', adjustCanvasSize);
 

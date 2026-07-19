@@ -75,15 +75,16 @@ body{
    rotation from that edge, so the two can't drift apart. */
 #hexInput{
     position: absolute;
-    /* width/height/line-height come from JS, sized in the pre-scale space */
+    height: 14px;
+    /* width is set from the edge length in JS; centred so the text lands on the
+       edge's midpoint */
     text-align: center;
 
-    /* 16px stops iOS zooming the page on focus; JS scales the field back down to
-       HEX_VISUAL_PX, so this is a layout size, not the drawn one. Sizes below are in
-       that same pre-scale space. */
+    /* 3x3 is a wide face, so this reads bigger than the number suggests */
     font-family: '3x3', monospace;
-    font-size: 16px;
-    letter-spacing: 1.33px;
+    font-size: 12px;
+    line-height: 14px;
+    letter-spacing: 1px;
     text-transform: uppercase;
     color: rgb(255, 53, 94);
 
