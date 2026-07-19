@@ -32,22 +32,20 @@ body{
     src: url('./assets/3x3Font.otf') format('opentype');
 }
 
-/* ── Colour picker drawer ─────────────────────────────────────────────────────
-   The tab and panel sit in one flex row pinned to the right edge. Closed, the
-   whole row is pushed right by exactly the panel's width, so the panel clears the
-   viewport and only the tab remains — one transform drives the whole animation. */
+/* ── Colour picker ────────────────────────────────────────────────────────────
+   No panel chrome — the triangle and hue bar carry their own outlines. Closed, one
+   transform pushes the row right so only the triangle's tip stays on screen; JS
+   sets --closed-shift from the real geometry rather than duplicating it here. */
 #colorPicker{
-    --panel-w: 226px;
-
     position: fixed;
     top: 50%;
     right: 0;
     z-index: 10;
 
     display: flex;
-    align-items: center;
+    align-items: flex-start;
 
-    transform: translate(var(--panel-w), -50%);
+    transform: translate(var(--closed-shift, 151px), -50%);
     transition: transform 200ms ease-out;
 
     touch-action: none;
@@ -63,108 +61,54 @@ body{
     }
 }
 
-/* Handle: always on screen, filled with the current colour. */
-#colorTab{
-    flex: 0 0 auto;
-    width: 30px;
-    height: 76px;
-    padding: 5px;
-
-    background: #000;
-    border: 4px solid #000;
-    border-right-width: 0;
-    border-radius: 10px 0 0 10px;
-
-    cursor: pointer;
-    touch-action: manipulation;
+#trianglePane{
+    position: relative;
 }
 
-#colorTabSwatch{
-    display: block;
-    width: 100%;
-    height: 100%;
-    border-radius: 5px 0 0 5px;
-    background: #fff;
-}
-
-#colorPanel{
-    width: var(--panel-w);
-    padding: 12px;
-
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-
-    background: rgba(10, 10, 10, 0.92);
-    border: 4px solid #000;
-    border-right-width: 0;
-    border-radius: 10px 0 0 10px;
-}
-
-#pickerControls{
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-}
-
-#pickerControls canvas{
+#colorPicker canvas{
     display: block;
     touch-action: none;  /* the canvases handle their own drags */
     cursor: crosshair;
 }
 
-#pickerReadout{
-    display: flex;
-    align-items: center;
-    gap: 8px;
-
-    padding: 4px;
-    background: #000;
-    border-radius: 6px;
-}
-
-#hexSwatch{
-    flex: 0 0 auto;
-    width: 22px;
-    height: 22px;
-
-    border-radius: 4px;
-    background: #fff;
-    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
-}
-
+/* Angled to run parallel with the triangle's lower edge. JS sets the position and
+   rotation from that edge, so the two can't drift apart. */
 #hexInput{
-    flex: 1 1 auto;
-    min-width: 0;
+    position: absolute;
+    width: 150px;
+    height: 14px;
 
     /* 3x3 is a wide face, so this reads bigger than the number suggests */
     font-family: '3x3', monospace;
-    font-size: 15px;
+    font-size: 12px;
+    line-height: 14px;
     letter-spacing: 1px;
     text-transform: uppercase;
     color: rgb(255, 53, 94);
 
-    padding: 3px 4px;
+    padding: 0;
     background: transparent;
     border: none;
     outline: none;
-    border-radius: 4px;
+
+    /* nothing behind it any more, so it carries its own contrast */
+    text-shadow:
+         1px  1px 0 #000, -1px  1px 0 #000,
+         1px -1px 0 #000, -1px -1px 0 #000;
 
     /* body turns off selection and touch for the game — the hex field needs both */
     -webkit-user-select: text;
     user-select: text;
     touch-action: auto;
     cursor: text;
+
+    /* hidden while closed so it can't peek out beside the tip */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 150ms ease-out;
 }
 
-#hexInput:focus{
-    background: rgba(255, 53, 94, 0.18);
-}
-
-/* Touch devices get a bigger handle to hit */
-@media (pointer: coarse){
-    #colorTab{
-        width: 38px;
-        height: 92px;
-    }
+#colorPicker.is-open #hexInput{
+    opacity: 1;
+    pointer-events: auto;
 }

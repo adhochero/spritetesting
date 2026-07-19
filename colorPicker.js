@@ -1,5 +1,6 @@
 // colorPicker.js — self-contained HSV picker: a triangle gamut for the current hue
-// beside a vertical hue bar, in a drawer that slides in from the right edge.
+// beside a vertical hue bar. The triangle's own tip is the handle: closed, only that
+// tip shows past the right edge; clicking it slides the whole picker out.
 // Canvas-rendered with chunky black outlines to match the game's pixel/retro UI.
 // No dependencies.
 
@@ -74,6 +75,13 @@ const BORDER = 6;                       // chunky retro outline
 const TRI_W = 150, TRI_H = 150;
 const HUE_W = 34, HUE_H = 150;
 const CURSOR_R = 9;
+const CORNER_R = 8;                     // triangle corner rounding
+const HUE_OVERLAP = 3;                  // pulls the hue bar's outline against the triangle's
+const TIP_PEEK = 30;                    // width of tip left on screen when closed
+
+// Hex sits just outside the lower edge, rotated to run parallel with it.
+const HEX_EDGE_START = 0.04;            // how far along that edge the text begins
+const HEX_EDGE_GAP = 6;                 // perpendicular clearance from the edge
 
 // Triangle corners. Left apex is the fully saturated hue, top-right is white and
 // bottom-right is black — so any interior point is a hue/white/black mix, which is
@@ -90,12 +98,24 @@ const AY = (BLACK.x - WHITE.x) / DENOM;
 const WX = (BLACK.y - APEX.y) / DENOM;
 const WY = (APEX.x - BLACK.x) / DENOM;
 
-function barycentric(x, y) {
-    const dx = x - BLACK.x;
-    const dy = y - BLACK.y;
-    const a = AX * dx + AY * dy;
-    const w = WX * dx + WY * dy;
-    return { a, w, k: 1 - a - w };
+// Rounds every corner by arcing between the midpoints of adjacent edges.
+function roundedPolygonPath(ctx, points, radius) {
+    const n = points.length;
+    const mid = (p, q) => ({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 });
+
+    const start = mid(points[n - 1], points[0]);
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    for (let i = 0; i < n; i++) {
+        const corner = points[i];
+        const nextMid = mid(corner, points[(i + 1) % n]);
+        ctx.arcTo(corner.x, corner.y, nextMid.x, nextMid.y, radius);
+    }
+    ctx.closePath();
+}
+
+function trianglePath(ctx) {
+    roundedPolygonPath(ctx, [APEX, WHITE, BLACK], CORNER_R);
 }
 
 function roundRectPath(ctx, x, y, w, h, r) {
@@ -124,12 +144,9 @@ function sizeCanvas(canvas, cssW, cssH) {
 
 export function createColorPicker({ hue = 0, saturation = 100, brightness = 100, onChange } = {}) {
     const root = document.getElementById('colorPicker');
-    const tab = document.getElementById('colorTab');
-    const tabSwatch = document.getElementById('colorTabSwatch');
     const triangleCanvas = document.getElementById('triangleCanvas');
     const hueCanvas = document.getElementById('hueCanvas');
     const hexInput = document.getElementById('hexInput');
-    const hexSwatch = document.getElementById('hexSwatch');
 
     const state = { h: hue, s: saturation, b: brightness };
     let isOpen = false;
@@ -139,6 +156,20 @@ export function createColorPicker({ hue = 0, saturation = 100, brightness = 100,
 
     const trackTop = BORDER;
     const trackBottom = HUE_H - BORDER;
+
+    // Geometry lives here, so the layout that depends on it is derived rather than
+    // duplicated in the stylesheet.
+    hueCanvas.style.marginLeft = -HUE_OVERLAP + 'px';
+    root.style.setProperty('--closed-shift', (TRI_W + HUE_W - HUE_OVERLAP - TIP_PEEK) + 'px');
+
+    // Lay the hex along the apex→black edge, offset clear of it on the outside.
+    const edgeAngle = Math.atan2(BLACK.y - APEX.y, BLACK.x - APEX.x);
+    const normalX = -Math.sin(edgeAngle);
+    const normalY = Math.cos(edgeAngle);
+    hexInput.style.left = (APEX.x + (BLACK.x - APEX.x) * HEX_EDGE_START + normalX * HEX_EDGE_GAP) + 'px';
+    hexInput.style.top = (APEX.y + (BLACK.y - APEX.y) * HEX_EDGE_START + normalY * HEX_EDGE_GAP) + 'px';
+    hexInput.style.transformOrigin = '0 0';
+    hexInput.style.transform = `rotate(${edgeAngle}rad)`;
 
     // Cursor position for the current saturation/brightness. Inverting the weights
     // derived below: a = s*v, w = (1-s)*v, k = 1-v.
@@ -158,10 +189,11 @@ export function createColorPicker({ hue = 0, saturation = 100, brightness = 100,
     // saturation is a/(a+w). Negative weights mean the point is outside, so they're
     // clamped and renormalised — that projects the drag onto the nearest edge.
     function cursorToSb(x, y) {
-        let { a, w, k } = barycentric(x, y);
-        a = Math.max(0, a);
-        w = Math.max(0, w);
-        k = Math.max(0, k);
+        const dx = x - BLACK.x;
+        const dy = y - BLACK.y;
+        let a = Math.max(0, AX * dx + AY * dy);
+        let w = Math.max(0, WX * dx + WY * dy);
+        let k = Math.max(0, 1 - (AX * dx + AY * dy) - (WX * dx + WY * dy));
 
         const sum = a + w + k;
         if (sum === 0) return { s: state.s, b: 0 };
@@ -202,15 +234,38 @@ export function createColorPicker({ hue = 0, saturation = 100, brightness = 100,
         }
         triCtx.putImageData(image, 0, 0); // raw write, ignores the dpr transform
 
+        // putImageData can't be clipped, so trim the square-cornered fill down to the
+        // rounded outline afterwards.
+        triCtx.save();
+        triCtx.globalCompositeOperation = 'destination-in';
+        trianglePath(triCtx);
+        triCtx.fill();
+        triCtx.restore();
+
+        // Closed, the tip is the only thing on screen — flood it with the picked
+        // colour so it reads as a swatch. The seam sits off-screen at the viewport
+        // edge, and open the gamut is left honest.
+        if (!isOpen) {
+            triCtx.save();
+            triCtx.beginPath();
+            triCtx.rect(0, 0, TIP_PEEK + 4, TRI_H);
+            triCtx.clip();
+            trianglePath(triCtx);
+            triCtx.fillStyle = hsbToRgbString(state.h, state.s, state.b);
+            triCtx.fill();
+            triCtx.restore();
+        }
+
         triCtx.lineWidth = BORDER;
         triCtx.lineJoin = 'round';
         triCtx.strokeStyle = '#000';
-        triCtx.beginPath();
-        triCtx.moveTo(APEX.x, APEX.y);
-        triCtx.lineTo(WHITE.x, WHITE.y);
-        triCtx.lineTo(BLACK.x, BLACK.y);
-        triCtx.closePath();
+        trianglePath(triCtx);
         triCtx.stroke();
+
+        // The cursor is an editing affordance, and a fully saturated pick parks it
+        // right on the apex — so leave it off while closed or it reads as a stray
+        // dot stuck to the tip.
+        if (!isOpen) return;
 
         const p = currentCursor();
         triCtx.beginPath();
@@ -252,9 +307,6 @@ export function createColorPicker({ hue = 0, saturation = 100, brightness = 100,
     }
 
     function syncReadout() {
-        const css = hsbToRgbString(state.h, state.s, state.b);
-        tabSwatch.style.backgroundColor = css;
-        hexSwatch.style.backgroundColor = css;
         // Don't fight the user mid-edit.
         if (document.activeElement !== hexInput) hexInput.value = hsbToHex(state.h, state.s, state.b);
     }
@@ -280,6 +332,11 @@ export function createColorPicker({ hue = 0, saturation = 100, brightness = 100,
         canvas.addEventListener('pointerdown', event => {
             event.preventDefault();
             event.stopPropagation();
+            // Closed, the exposed tip is just a handle — open instead of picking.
+            if (!isOpen) {
+                setOpen(true);
+                return;
+            }
             dragging = true;
             handle(toLocal(event));
             // Capture is a nicety — never let it swallow the update above.
@@ -330,7 +387,6 @@ export function createColorPicker({ hue = 0, saturation = 100, brightness = 100,
         state.b = parsed.b;
         renderHue();
         renderTriangle();
-        syncReadout();
         emit();
     });
     hexInput.addEventListener('blur', syncReadout);
@@ -342,23 +398,17 @@ export function createColorPicker({ hue = 0, saturation = 100, brightness = 100,
     function setOpen(open) {
         isOpen = open;
         root.classList.toggle('is-open', open);
-        tab.setAttribute('aria-expanded', String(open));
+        renderTriangle(); // swaps the tip between swatch and live gamut
     }
 
-    tab.addEventListener('click', event => {
-        event.stopPropagation();
-        setOpen(!isOpen);
-    });
-
-    // Anything outside the drawer dismisses it. The controls above stop their own
+    // Anything outside the picker dismisses it. The controls above stop their own
     // events, so this only sees genuine outside presses.
     document.addEventListener('pointerdown', event => {
         if (isOpen && !root.contains(event.target)) setOpen(false);
     });
 
-    setOpen(false);
     renderHue();
-    renderTriangle();
+    setOpen(false); // also performs the first triangle render
     syncReadout();
     emit();
 

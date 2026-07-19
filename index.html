@@ -8,23 +8,14 @@
 <body>
   <canvas id="gameCanvas"></canvas>
 
-  <!-- Drawer: the tab stays on screen, the panel sits off-screen until opened. -->
-  <div id="colorPicker">
-    <button id="colorTab" type="button" aria-expanded="false" aria-controls="colorPanel" aria-label="Toggle colour picker">
-      <span id="colorTabSwatch"></span>
-    </button>
-
-    <div id="colorPanel" role="group" aria-label="Colour picker">
-      <div id="pickerControls">
-        <canvas id="triangleCanvas" aria-label="Saturation and brightness"></canvas>
-        <canvas id="hueCanvas" aria-label="Hue"></canvas>
-      </div>
-
-      <label id="pickerReadout">
-        <span id="hexSwatch"></span>
-        <input id="hexInput" type="text" spellcheck="false" autocomplete="off" maxlength="7" aria-label="Hex colour">
-      </label>
+  <!-- The triangle's own tip is the handle: closed, only that tip shows past the
+       right edge; clicking it slides the whole picker out. -->
+  <div id="colorPicker" role="group" aria-label="Colour picker">
+    <div id="trianglePane">
+      <canvas id="triangleCanvas" aria-label="Saturation and brightness"></canvas>
+      <input id="hexInput" type="text" spellcheck="false" autocomplete="off" maxlength="7" aria-label="Hex colour">
     </div>
+    <canvas id="hueCanvas" aria-label="Hue"></canvas>
   </div>
 
   <script type="module" src="./app.js"></script>
