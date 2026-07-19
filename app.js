@@ -467,13 +467,30 @@ function getRespawnFlashAlpha(deltaTime) {
     return lerp(respawnFlashMinAlpha, 1, wave);
 }
 
+// Picking uniformly at random every death gives long identical streaks — with two
+// animations an 8-in-a-row turns up about once every 256 deaths, which just reads as
+// broken. This deals every animation once before any repeats, so the most that can
+// ever play back to back is two (the tail of one bag into the head of the next).
+let deathBag = [];
+
+function nextDeathSheet() {
+    if (deathBag.length === 0) {
+        deathBag = deathSheets.map((_, index) => index);
+        for (let i = deathBag.length - 1; i > 0; i--) { // Fisher-Yates
+            const j = Math.floor(Math.random() * (i + 1));
+            [deathBag[i], deathBag[j]] = [deathBag[j], deathBag[i]];
+        }
+    }
+    return deathSheets[deathBag.pop()];
+}
+
 function killPlayer() {
     isAlive = false;
     respawnTimer = 0;
     respawnFlashTimer = 0; // dying mid-pulse cancels it
 
-    // Play one of the two death animations at random, once, holding the last frame
-    const sheet = deathSheets[Math.floor(Math.random() * deathSheets.length)];
+    // Play one of the death animations, once, holding the last frame
+    const sheet = nextDeathSheet();
     deathAnimatedSprite = new AnimatedSprite(
         sheet, 4, 2, 1, 4, spriteScale,
         localUserPosition.x, localUserPosition.y,
