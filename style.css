@@ -75,8 +75,10 @@ body{
    rotation from that edge, so the two can't drift apart. */
 #hexInput{
     position: absolute;
-    width: 150px;
     height: 14px;
+    /* width is set from the edge length in JS; centred so the text lands on the
+       edge's midpoint */
+    text-align: center;
 
     /* 3x3 is a wide face, so this reads bigger than the number suggests */
     font-family: '3x3', monospace;

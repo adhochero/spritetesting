@@ -77,10 +77,9 @@ const HUE_W = 34, HUE_H = 150;
 const CURSOR_R = 9;
 const CORNER_R = 8;                     // triangle corner rounding
 const HUE_OVERLAP = 3;                  // pulls the hue bar's outline against the triangle's
-const TIP_PEEK = 30;                    // width of tip left on screen when closed
+const TIP_PEEK = 44;                    // width of tip left on screen when closed
 
 // Hex sits just outside the lower edge, rotated to run parallel with it.
-const HEX_EDGE_START = 0.04;            // how far along that edge the text begins
 const HEX_EDGE_GAP = 6;                 // perpendicular clearance from the edge
 
 // Triangle corners. Left apex is the fully saturated hue, top-right is white and
@@ -162,12 +161,15 @@ export function createColorPicker({ hue = 0, saturation = 100, brightness = 100,
     hueCanvas.style.marginLeft = -HUE_OVERLAP + 'px';
     root.style.setProperty('--closed-shift', (TRI_W + HUE_W - HUE_OVERLAP - TIP_PEEK) + 'px');
 
-    // Lay the hex along the apex→black edge, offset clear of it on the outside.
+    // Lay the hex along the apex→black edge, offset clear of it on the outside. The
+    // field spans the whole edge and centres its own text, so the hex lands on the
+    // edge's midpoint whatever its rendered width.
     const edgeAngle = Math.atan2(BLACK.y - APEX.y, BLACK.x - APEX.x);
     const normalX = -Math.sin(edgeAngle);
     const normalY = Math.cos(edgeAngle);
-    hexInput.style.left = (APEX.x + (BLACK.x - APEX.x) * HEX_EDGE_START + normalX * HEX_EDGE_GAP) + 'px';
-    hexInput.style.top = (APEX.y + (BLACK.y - APEX.y) * HEX_EDGE_START + normalY * HEX_EDGE_GAP) + 'px';
+    hexInput.style.width = Math.hypot(BLACK.x - APEX.x, BLACK.y - APEX.y) + 'px';
+    hexInput.style.left = (APEX.x + normalX * HEX_EDGE_GAP) + 'px';
+    hexInput.style.top = (APEX.y + normalY * HEX_EDGE_GAP) + 'px';
     hexInput.style.transformOrigin = '0 0';
     hexInput.style.transform = `rotate(${edgeAngle}rad)`;
 
