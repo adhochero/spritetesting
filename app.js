@@ -1,6 +1,7 @@
 import { Input } from './input.js';
 import { AnimatedSprite } from './animatedSprite.js';
 import { createColorPicker, hsbToRgbString } from './colorPicker.js';
+import { TILE_PX, TILE_SIZE, SPAWN, dualGridAtlasAt } from './world.js';
 
 const canvas = document.getElementById('gameCanvas');
 const context = canvas.getContext('2d');
@@ -10,7 +11,7 @@ const canvasResolutionHeight = 666;
 
 let lastTimeStamp = 0;
 
-let localUserPosition = { x: 333, y: 333 };
+let localUserPosition = { x: SPAWN.x, y: SPAWN.y };
 let localAnimatedSprite;
 let localPlayerState = {
     lastDirectionX: 1
@@ -43,6 +44,9 @@ const deathImages = [
 // Solid black 16x16 ellipse, drawn translucent rather than tinted — it's the ground
 // marker, not part of the character, so the colour picker must not reach it.
 const shadowImage = loadImage('./assets/shadow.png');
+
+// 4x4 sheet of dual-grid terrain tiles, also outside the tint targets
+const terrainTiles = loadImage('./assets/DualGrid_TileSet_Grass.png');
 
 // The character fills its frame right down to the bottom edge, so shifting it up by
 // half a frame puts its feet on the ground position — where the shadow is centred.
@@ -148,7 +152,10 @@ window.addEventListener('load', async () => {
     adjustCanvasSize();
 
     // The sheets have to be decoded before they can be tinted into the offscreen canvases
-    await Promise.all(tintTargets.map(({ source }) => source.decode().catch(() => {})));
+    await Promise.all([
+        ...tintTargets.map(({ source }) => source.decode()),
+        terrainTiles.decode()
+    ].map(promise => promise.catch(() => {})));
 
     // Fires once on creation, which lays down the initial tint
     createColorPicker({ ...DEFAULT_COLOR, onChange: applyPlayerColor });
@@ -199,13 +206,13 @@ function update(timeStamp) {
     context.beginPath();
     context.imageSmoothingEnabled = false;
 
-    // Draw grid
-    drawGrid(-(camera.x + canvas.width / 2), -(camera.y + canvas.height / 2));
-
-    // Apply camera transform
-    context.translate(camera.x, camera.y);
+    // Apply camera transform. Snapping to whole pixels keeps the tile grid from
+    // showing seams between neighbouring tiles, and keeps the pixel art crisp.
+    context.translate(Math.round(camera.x), Math.round(camera.y));
 
     // --- DRAW IN WORLD ---
+
+    drawTerrain();
 
     // Shadow stays on the ground under the player at all times, and outside the
     // respawn flash so it holds steady while the character pulses
@@ -521,26 +528,31 @@ function respawnPlayer() {
     localPlayerState.lastDirectionX = 1;
 }
 
-function drawGrid(offsetX, offsetY) {
-    const gridSize = 50;
-    context.strokeStyle = "#fff";
-    context.lineWidth = 0.5;
+// Draws the dual-grid display cells covering the viewport. Display cells sit half a
+// tile off the terrain grid, so cell (col,row) is centred on the terrain corner at
+// (col, row) * TILE_SIZE. Out-of-bounds terrain reads as dirt, so this keeps filling
+// the screen however far the player wanders off the island.
+function drawTerrain() {
+    if (!terrainTiles.naturalWidth) return; // not decoded yet
 
-    const startX = Math.floor(offsetX / gridSize) * gridSize - offsetX;
-    const startY = Math.floor(offsetY / gridSize) * gridSize - offsetY;
+    const left = -Math.round(camera.x);
+    const top = -Math.round(camera.y);
+    const half = TILE_SIZE / 2;
 
-    for (let x = startX; x < canvas.width; x += gridSize) {
-        context.beginPath();
-        context.moveTo(x, 0);
-        context.lineTo(x, canvas.height);
-        context.stroke();
-    }
+    const startCol = Math.floor((left - half) / TILE_SIZE);
+    const endCol = Math.ceil((left + canvas.width + half) / TILE_SIZE);
+    const startRow = Math.floor((top - half) / TILE_SIZE);
+    const endRow = Math.ceil((top + canvas.height + half) / TILE_SIZE);
 
-    for (let y = startY; y < canvas.height; y += gridSize) {
-        context.beginPath();
-        context.moveTo(0, y);
-        context.lineTo(canvas.width, y);
-        context.stroke();
+    for (let row = startRow; row <= endRow; row++) {
+        for (let col = startCol; col <= endCol; col++) {
+            const [atlasCol, atlasRow] = dualGridAtlasAt(col, row);
+            context.drawImage(
+                terrainTiles,
+                atlasCol * TILE_PX, atlasRow * TILE_PX, TILE_PX, TILE_PX,
+                col * TILE_SIZE - half, row * TILE_SIZE - half, TILE_SIZE, TILE_SIZE
+            );
+        }
     }
 }
 
