@@ -93,13 +93,12 @@ const SHADOW_MIN_JUMP_SCALE = 0.5;  // shadow's stretch span at the apex, vs gro
 const SHADOW_DEATH_SCALE_X = 1.8;   // widen to sit under the lying-down body
 const SHADOW_DEATH_DELAY_FRAMES = 2; // death frames spent still standing before the widen
 
-// Footprints. Sized in art pixels so they stay on the same grid as the sprites —
-// 2 art pixels is 6 world units at this scale.
-const FOOTPRINT_SIZE = 2 * spriteScale;
+// Footprints. Sized in art pixels so they stay on the same grid as the sprites.
+const FOOTPRINT_SIZE = 3 * spriteScale;
 const FOOTPRINT_SPREAD = 5;    // world units either side of the walking line
-const FOOTPRINT_STRIDE = 26;   // world units travelled between prints
+const FOOTPRINT_STRIDE = 20;   // world units travelled between prints
 const FOOTPRINT_LIFE = 2.5;    // seconds to fade out
-const FOOTPRINT_OPACITY = 0.28;
+const FOOTPRINT_OPACITY = 0.20;
 const FOOTPRINT_MAX = 80;      // oldest are dropped past this, so the array stays bounded
 
 let footprints = [];
