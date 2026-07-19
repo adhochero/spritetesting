@@ -36,8 +36,10 @@ const EDGE_FALLOFF = 0.55;    // how hard that chance falls off toward the edges
 const CLEARING_RADIUS = 3.4;  // grass disc guaranteed around spawn
 const TRAIL_COUNT = 2;
 const TRAIL_RADIUS = 0.9;     // one cell wide — any wider and trails eat the coast
-const TRAIL_STEPS = 16;       // long enough to reach the shore from the clearing
-const TRAIL_WANDER = 0.6;     // amplitude of the meander, in radians
+const TRAIL_LENGTH = 18;      // cells travelled from the clearing out to the shore
+const TRAIL_STEP = 0.5;       // sub-cell stepping; whole steps skip past cells
+const TRAIL_WANDER = 1.1;     // amplitude of the meander, in radians
+const TRAIL_FREQ = 0.45;      // meander cycles per cell travelled
 
 // mulberry32 — a small deterministic PRNG, so one seed always yields one island.
 function makeRandom(seed) {
@@ -105,22 +107,48 @@ function generate() {
     // sine term does the meandering, and the phase stops them tracing the same curve.
     // Running them outward from spawn (rather than straight across the map) keeps
     // them from merging with the coastline and carving the island apart.
+    // Two sine octaves drive the meander — a single one traces a recognisably regular
+    // curve. TRAIL_FREQ matters more than the amplitude here: too low and the sine
+    // never completes a cycle over the trail's length, so it bends gently one way and
+    // reads as a straight line instead of winding.
     const firstHeading = random() * Math.PI * 2;
     for (let trail = 0; trail < TRAIL_COUNT; trail++) {
         const heading = firstHeading
             + (trail * Math.PI * 2) / TRAIL_COUNT
             + (random() - 0.5);
         const phase = random() * Math.PI * 2;
+        const phaseTwo = random() * Math.PI * 2;
 
         let col = SPAWN_COL;
         let row = SPAWN_ROW;
-        for (let i = 0; i < TRAIL_STEPS; i++) {
+        let lastCol = null;
+        let lastRow = null;
+
+        const steps = Math.round(TRAIL_LENGTH / TRAIL_STEP);
+        for (let i = 0; i < steps; i++) {
+            const travelled = i * TRAIL_STEP;
             const angle = heading
-                + Math.sin(i * 0.18 + phase) * TRAIL_WANDER
-                + (random() - 0.5) * 0.2;
-            col += Math.cos(angle);
-            row += Math.sin(angle);
-            stamp(col, row, TRAIL_RADIUS, DIRT);
+                + Math.sin(travelled * TRAIL_FREQ + phase) * TRAIL_WANDER
+                + Math.sin(travelled * TRAIL_FREQ * 2.3 + phaseTwo) * TRAIL_WANDER * 0.35;
+
+            col += Math.cos(angle) * TRAIL_STEP;
+            row += Math.sin(angle) * TRAIL_STEP;
+
+            const cellCol = Math.round(col);
+            const cellRow = Math.round(row);
+
+            // A diagonal hop leaves two cells touching only at a corner, which the
+            // dual grid draws as a pinch — the trail beads up instead of reading as
+            // one path. Filling the elbow keeps every step orthogonal. Shrinking the
+            // step alone never fixes this: at 45° both axes cross the rounding
+            // boundary together no matter how fine the stepping gets.
+            if (lastCol !== null && cellCol !== lastCol && cellRow !== lastRow) {
+                stamp(lastCol, cellRow, TRAIL_RADIUS, DIRT);
+            }
+
+            stamp(cellCol, cellRow, TRAIL_RADIUS, DIRT);
+            lastCol = cellCol;
+            lastRow = cellRow;
         }
     }
 
